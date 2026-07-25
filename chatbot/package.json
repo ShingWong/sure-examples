@@ -1,0 +1,19 @@
+{
+  "name": "sure-chatbot-example",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lightweight in-memory chatbot showcasing the sure-* ecosystem",
+  "type": "module",
+  "scripts": {
+    "start": "tsx server.js",
+    "setup": "npm install && mkdir -p public"
+  },
+  "devDependencies": {
+    "tsx": "^4.0.0"
+  },
+  "dependencies": {
+    "sure-gentic": "file:../../sure-gentic",
+    "sure-state": "file:../../sure-state",
+    "sure-ui": "file:../../sure-ui"
+  }
+}
