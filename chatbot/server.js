@@ -71,23 +71,45 @@ let currentConfig = {
   model: '',
   temperature: 0.7,
   theme: 'nord',
+  baseUrl: '',
+  label: '',
 }
 
 // ── sure-gentic integration ──
 import { Agent, BaseSkill } from 'sure-gentic'
-import { LLMProviderFactory } from 'sure-gentic'
+import { LLMProviderFactory, OpenAIProvider, AnthropicProvider, GoogleProvider, OpenAICompatibleProvider, MockProvider } from 'sure-gentic'
 
 let agent = null
 
 async function getAgent(config) {
-  if (config.provider === 'mock') {
+  const factory = LLMProviderFactory.getInstance()
+  factory.clear()
+
+  if (config.provider === 'mock' || config.provider === '') {
     process.env.AI_PROVIDER = 'mock'
+    factory.register(new MockProvider())
   } else if (config.provider === 'openai') {
-    process.env.AI_PROVIDER = 'openai'
     process.env.OPENAI_API_KEY = config.apiKey
+    factory.register(new OpenAIProvider(config.apiKey))
+    process.env.AI_PROVIDER = 'openai'
   } else if (config.provider === 'anthropic') {
-    process.env.AI_PROVIDER = 'anthropic'
     process.env.ANTHROPIC_API_KEY = config.apiKey
+    factory.register(new AnthropicProvider(config.apiKey))
+    process.env.AI_PROVIDER = 'anthropic'
+  } else if (config.provider === 'google') {
+    process.env.GOOGLE_API_KEY = config.apiKey
+    factory.register(new GoogleProvider(config.apiKey))
+    process.env.AI_PROVIDER = 'google'
+  } else if (config.provider === 'openai-compatible') {
+    process.env.OPENAI_API_KEY = config.apiKey
+    process.env.VISION_BASE_URL = config.baseUrl
+    factory.register(new OpenAICompatibleProvider({
+      apiKey: config.apiKey,
+      baseURL: config.baseUrl,
+      defaultModel: config.model || 'gpt-4o',
+      label: config.label || 'custom',
+    }))
+    process.env.AI_PROVIDER = 'openai-compatible'
   }
   if (config.model) process.env.AI_MODEL = config.model
   process.env.AI_TEMPERATURE = String(config.temperature)

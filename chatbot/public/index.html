@@ -139,15 +139,24 @@
         <option value="mock">Mock (no API key needed)</option>
         <option value="openai">OpenAI</option>
         <option value="anthropic">Anthropic</option>
+        <option value="google">Google Gemini</option>
+        <option value="openai-compatible">OpenAI-compatible (OpenRouter, llama.cpp, vLLM, ...)</option>
       </select>
       <div class="hint" id="providerHint">Mock mode — no external API calls</div>
     </div>
 
     <!-- API Key -->
-    <div class="field">
+    <div class="field" id="apiKeyField">
       <label>API Key</label>
       <input type="password" id="apiKey" placeholder="sk-..." onchange="onConfigChange()">
       <div class="hint">Stored in memory only, never persisted</div>
+    </div>
+
+    <!-- Base URL (for OpenAI-compatible providers) -->
+    <div class="field" id="baseUrlField" style="display:none">
+      <label>Base URL</label>
+      <input type="text" id="baseUrl" placeholder="https://openrouter.ai/api/v1" onchange="onConfigChange()">
+      <div class="hint">API endpoint URL for OpenAI-compatible providers</div>
     </div>
 
     <!-- Model -->
@@ -195,15 +204,54 @@
 <div class="toast-container" id="toastContainer"></div>
 
 <script>
+// ── Cookie store (inline — mirrors sure-state's createCookieStore API) ──
+const cookieStore = {
+  prefix: 'sure_',
+  _parse() {
+    const result = {}
+    document.cookie.split(';').forEach(pair => {
+      const eq = pair.indexOf('=')
+      if (eq === -1) return
+      result[pair.slice(0, eq).trim()] = decodeURIComponent(pair.slice(eq + 1).trim())
+    })
+    return result
+  },
+  get(key, defaults = {}) {
+    const all = this._parse()
+    const val = all[this.prefix + key]
+    return val !== undefined ? val : (defaults[key] ?? null)
+  },
+  set(key, value) {
+    document.cookie = `${this.prefix + key}=${encodeURIComponent(value)}; path=/; max-age=${365 * 86400}; SameSite=lax`
+  },
+  getAll(defaults = {}) {
+    const all = this._parse()
+    const result = { ...defaults }
+    for (const [k, v] of Object.entries(all)) {
+      if (k.startsWith(this.prefix)) result[k.slice(this.prefix.length)] = v
+    }
+    return result
+  },
+}
+
 // ── State ──
 let config = { provider: 'mock', apiKey: '', model: '', temperature: 0.7, theme: 'nord' }
 let conversations = []
 let activeConversationId = null
 let isLoading = false
 
+// Restore persisted settings from cookies
+const saved = cookieStore.getAll({ theme: 'nord' })
+if (saved.theme) config.theme = saved.theme
+if (saved.provider) config.provider = saved.provider
+if (saved.model) config.model = saved.model
+if (saved.temperature) config.temperature = parseFloat(saved.temperature)
+if (saved.baseUrl) config.baseUrl = saved.baseUrl
+
 // ── Theme ──
 async function setTheme(name, btn) {
   config.theme = name
+  cookieStore.set('theme', name)
   document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'))
   if (btn) btn.classList.add('active')
   try {
@@ -216,12 +264,6 @@ async function setTheme(name, btn) {
       document.head.appendChild(styleEl)
     }
     styleEl.textContent = css
-    // Apply CSS variables from the theme's :root block
-    const tmp = document.createElement('div')
-    tmp.innerHTML = css
-    // Re-extract CSS variable values from computed style after injection
-    // (the :root block sets them automatically via the injected stylesheet)
-    // Set inline fallbacks for dynamic JS use
     const root = getComputedStyle(document.documentElement)
     document.documentElement.style.setProperty('--bg', root.getPropertyValue('--bg') || (name === 'dracula' ? '#282a36' : name === 'forest' ? '#f4f1ea' : '#f8f9fa'))
   } catch (e) {
@@ -242,11 +284,13 @@ async function loadConfig() {
     config = await res.json()
     document.getElementById('provider').value = config.provider
     document.getElementById('apiKey').value = config.apiKey || ''
+    document.getElementById('baseUrl').value = config.baseUrl || ''
     document.getElementById('model').value = config.model || ''
     document.getElementById('temperature').value = config.temperature || 0.7
     document.getElementById('tempValue').textContent = config.temperature || 0.7
     setTheme(config.theme, document.querySelector(`.theme-btn[data-theme="${config.theme}"]`))
     updateProviderHint(config.provider)
+    toggleBaseUrlField(config.provider)
   } catch (e) { console.error('Config load failed:', e) }
 }
 
@@ -264,10 +308,22 @@ async function saveConfig() {
 function onConfigChange() {
   config.provider = document.getElementById('provider').value
   config.apiKey = document.getElementById('apiKey').value
+  config.baseUrl = document.getElementById('baseUrl').value
   config.model = document.getElementById('model').value
   config.temperature = parseFloat(document.getElementById('temperature').value)
+  // Persist to cookies — survives page reload
+  cookieStore.set('provider', config.provider)
+  cookieStore.set('model', config.model)
+  cookieStore.set('temperature', String(config.temperature))
+  cookieStore.set('baseUrl', config.baseUrl)
   updateProviderHint(config.provider)
+  toggleBaseUrlField(config.provider)
   saveConfig()
+}
+
+function toggleBaseUrlField(provider) {
+  const field = document.getElementById('baseUrlField')
+  field.style.display = provider === 'openai-compatible' ? 'block' : 'none'
 }
 
 function updateProviderHint(provider) {
@@ -275,6 +331,8 @@ function updateProviderHint(provider) {
     mock: 'Mock mode — no external API calls',
     openai: 'Requires OPENAI_API_KEY from platform.openai.com',
     anthropic: 'Requires ANTHROPIC_API_KEY from console.anthropic.com',
+    google: 'Requires GOOGLE_API_KEY from aistudio.google.com (free tier available)',
+    'openai-compatible': 'Any OpenAI-compatible API. Set API key and base URL. Examples: OpenRouter, llama.cpp, vLLM, Ollama, Together, Groq',
   }
   document.getElementById('providerHint').textContent = hints[provider] || ''
 }
