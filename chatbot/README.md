@@ -3,28 +3,35 @@
 **A lightweight in-memory chatbot showcasing the sure-\* ecosystem.** Configure LLM provider, API key, model, temperature, and theme — all from the UI. No database, no external frameworks, zero dependencies beyond the sure-\* packages.
 
 ```
-┌─────────────────────────────────────────────────────┐
-│  sure-chatbot                                        │
-│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
-│  │ sure-    │  │ sure-    │  │ sure-ui          │  │
-│  │ gentic   │  │ state    │  │ themes + toasts  │  │
-│  │ Agent +  │  │ eventBus │  │                  │  │
-│  │ Skills   │  │ store    │  │ 3 themes         │  │
-│  │          │  │ pattern  │  │ notifications    │  │
-│  └────┬─────┘  └────┬─────┘  └────────┬─────────┘  │
-│       │             │                 │            │
-│       ▼             ▼                 ▼            │
-│  ┌─────────────────────────────────────────────┐   │
-│  │  Node.js HTTP Server (zero framework)       │   │
-│  │  built-in http, fs, url modules             │   │
-│  └─────────────────────────────────────────────┘   │
-│           │                                        │
-│           ▼                                        │
-│  ┌─────────────────────────────────────────────┐   │
-│  │  HTML/CSS/JS Frontend (single file)         │   │
-│  │  Chat interface + settings drawer + themes  │   │
-│  └─────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│  sure-chatbot                                              │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────────┐        │
+│  │ sure-    │  │ sure-    │  │ sure-ui          │        │
+│  │ gentic   │  │ state    │  │ themes + toasts  │        │
+│  │ Agent +  │  │ eventBus │  │                  │        │
+│  │ Skills   │  │ store    │  │ 3 themes         │        │
+│  │          │  │ pattern  │  │ notifications    │        │
+│  └────┬─────┘  └────┬─────┘  └────────┬─────────┘        │
+│       │             │                 │                  │
+│       ▼             ▼                 ▼                  │
+│  ┌───────────────────────────────────────────────────┐   │
+│  │  Node.js HTTP Server (zero framework)             │   │
+│  │  built-in http, fs, url modules                   │   │
+│  └───────────────────────────────────────────────────┘   │
+│           │                                              │
+│           ▼                                              │
+│  ┌───────────────────────────────────────────────────┐   │
+│  │  HTML/CSS/JS Frontend (single file)               │   │
+│  │  Chat interface + settings drawer + themes        │   │
+│  └───────────────────────────────────────────────────┘   │
+│                                                          │
+│  ┌───────────────────────────────────────────────────┐   │
+│  │  sure-web-testing (E2E tests)                     │   │
+│  │  BrowserManager — launch, navigate, interact,     │   │
+│  │  inspect DOM/console/network between every step   │   │
+│  │  21 tests covering full chat UI flow              │   │
+│  └───────────────────────────────────────────────────┘   │
+└───────────────────────────────────────────────────────────┘
 ```
 
 ## Quick Start
@@ -32,11 +39,19 @@
 ```bash
 cd sure-examples/chatbot
 npm install
-node server.js
+npm start                    # tsx server.js
 # → http://localhost:3001
-```
 
 Open the browser. The chatbot starts in mock mode — no API key needed. Type a message, and the mock provider returns a canned response.
+
+### Run E2E tests
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e /path/to/sure-web-testing
+.venv/bin/playwright install chromium
+.venv/bin/python tests/run_tests.py    # 21 tests, all pass
+```
 
 Open the **Settings** drawer to:
 - Switch to OpenAI or Anthropic (enter your API key)
@@ -165,20 +180,73 @@ fields:
 
 The generated output would include validation regexes, sanitization pipelines (trim API keys, escape model names), and sure-state store bindings — matching the three-tier (vibe, prototype, production) pattern.
 
-### sure-web-testing — Browser Testing (future)
+### sure-web-testing — E2E Browser Testing
 
-The chatbot's chat flow and settings interaction can be tested step-by-step using sure-web-testing's MCP server:
+21 E2E tests run against the real chatbot using sure-web-testing's `BrowserManager`. The test script at `tests/test_chatbot.py` demonstrates multi-step browser testing:
 
+```python
+from browser import BrowserManager
+
+mgr = BrowserManager()
+mgr.launch(headless=True)
+mgr.goto("http://localhost:3001")
+
+# Interact step by step — browser stays alive between calls
+mgr.fill("#messageInput", "Hello!")
+mgr.click("#sendBtn")
+
+# Inspect state between every action
+dom = mgr.get_dom()
+logs = mgr.get_console_logs()
+screenshot = mgr.screenshot()
+
+mgr.close()
 ```
-launch(headless=true)
-goto("http://localhost:3001")
-click("button:has-text('Settings')")
-fill("input#apiKey", "sk-test-123")
-selectOption("select#provider", "openai")
-click("button:has-text('Send')")
-screenshot(highlight="#messages .message:last-child")
-get_console_logs()
-close()
+
+The test suite covers 21 scenarios:
+
+| # | Test | What it verifies |
+|---|------|-----------------|
+| 1 | `launch` | Browser session starts |
+| 2 | `goto chatbot` | Page loads without error |
+| 3 | `verify page load` | Title and URL are correct |
+| 4 | `verify sidebar` | Sidebar header, settings button, chat input exist |
+| 5 | `screenshot initial` | Base64 screenshot captured |
+| 6 | `open settings` | Settings button click opens drawer |
+| 7 | `verify settings` | Provider select, API key, model, temp, themes all present |
+| 8 | `switch theme` | Dracula theme applies via click |
+| 9 | `screenshot dracula` | Visual confirmation of theme change |
+| 10 | `switch back to nord` | Theme switches back |
+| 11 | `close settings` | Drawer closes |
+| 12 | `send message` | Text fills and send button works |
+| 13 | `verify response` | Assistant response appears in DOM |
+| 14 | `screenshot with messages` | Chat with conversation captured |
+| 15 | `console logs` | Browser console captured (no errors) |
+| 16 | `network requests` | API calls logged |
+| 17 | `clear messages` | Clear button works |
+| 18 | `new conversation` | New conversation button works |
+| 19 | `verify new conversation` | Clean state after new conversation |
+| 20 | `screenshot final` | Final state captured |
+| 21 | `close` | Browser session cleaned up |
+
+Each step is a separate browser interaction — the session stays alive between calls, and you can inspect DOM, console, network, and screenshots between every step.
+
+#### Run the tests
+
+```bash
+cd sure-examples/chatbot
+
+# Set up Python env (one time)
+python3 -m venv .venv
+.venv/bin/pip install -e /path/to/sure-web-testing
+.venv/bin/playwright install chromium
+
+# Run tests (starts server, runs browser tests, cleans up)
+.venv/bin/python tests/run_tests.py
+
+# Or step by step:
+npm start                    # terminal 1: start chatbot
+.venv/bin/python tests/test_chatbot.py   # terminal 2: run tests
 ```
 
 ## Architecture
@@ -258,6 +326,9 @@ chatbot/
   server.js        ← Node.js HTTP server (zero external framework)
   public/
     index.html     ← single-file frontend (chat UI + settings + themes)
+  tests/
+    run_tests.py   ← test runner (starts server, runs tests, cleans up)
+    test_chatbot.py ← 21 E2E tests using sure-web-testing BrowserManager
 ```
 
 ## Extending

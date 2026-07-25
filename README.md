@@ -4,7 +4,7 @@ Sample applications showcasing the sure-* ecosystem of libraries working togethe
 
 | Example | Description | Showcases |
 |---------|-------------|-----------|
-| [chatbot](./chatbot/) | Lightweight in-memory chatbot with configurable LLM provider, API keys, models, and themes | sure-gentic, sure-state, sure-ui |
+| [chatbot](./chatbot/) | Lightweight in-memory chatbot with configurable LLM provider, API keys, models, and themes. 21 E2E browser tests included. | sure-gentic, sure-state, sure-ui, sure-web-testing |
 
 ## Projects showcased
 

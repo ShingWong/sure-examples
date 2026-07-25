@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "tsx server.js",
-    "setup": "npm install && mkdir -p public"
+    "setup": "npm install",
+    "test": "cd tests && python run_tests.py"
   },
   "devDependencies": {
     "tsx": "^4.0.0"
