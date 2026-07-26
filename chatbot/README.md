@@ -22,7 +22,12 @@
 │           ▼                                              │
 │  ┌───────────────────────────────────────────────────┐   │
 │  │  HTML/CSS/JS Frontend (single file)               │   │
-│  │  Chat interface + settings drawer + themes        │   │
+│  │  Chat UI + Settings + Themes                      │   │
+│  │  ┌─────────────────────────────────────────┐      │   │
+│  │  │ Cookie Store (sure-state createCookieStore)│     │   │
+│  │  │ Preferences + chat history in cookies   │      │   │
+│  │  │ Survives page reload, agent-inspectable │      │   │
+│  │  └─────────────────────────────────────────┘      │   │
 │  └───────────────────────────────────────────────────┘   │
 │                                                          │
 │  ┌───────────────────────────────────────────────────┐   │
@@ -124,6 +129,62 @@ In a production app, this same pattern scales to `createEntityStore` from sure-s
 - Store event instrumentation (action tracking, error logging)
 - Entity store pattern (conversations as entities, messages as sub-entities)
 - Ready to scale to `createEntityStore` with server sync
+
+### sure-state createCookieStore — Client-Side Persistence
+
+The chatbot stores all user preferences and chat history in browser cookies using the same API pattern as sure-state's `createCookieStore`. Settings (theme, provider, model, temperature) and entire conversation histories survive page reload — no server-side database needed.
+
+```js
+// Inline cookie store — mirrors sure-state's createCookieStore API
+const cookieStore = {
+  prefix: 'sure_',
+  get(key, defaults) {
+    // Reads from document.cookie, falls back to defaults
+  },
+  set(key, value) {
+    document.cookie = `${this.prefix + key}=${encodeURIComponent(value)}; path=/; max-age=${365 * 86400}`
+  },
+  getAll(defaults) {
+    // Returns all prefixed cookies merged with defaults
+  },
+}
+
+// Persist settings on every change
+cookieStore.set('theme', 'dracula')
+cookieStore.set('provider', 'google')
+cookieStore.set('model', 'gemini-2.5-flash-lite')
+
+// Persist entire conversation history as JSON
+function saveConversations() {
+  const payload = JSON.stringify({ list: conversations, messages: messagesCache })
+  cookieStore.set('conversations', payload)
+  // Auto-truncates if cookie exceeds ~3.5KB
+}
+```
+
+**What gets persisted:**
+
+| Cookie | Content | Size strategy |
+|--------|---------|--------------|
+| `sure_theme` | Current theme name | Single value |
+| `sure_provider` | LLM provider selection | Single value |
+| `sure_model` | Model override | Single value |
+| `sure_temperature` | Temperature setting | Single value |
+| `sure_baseUrl` | Custom API base URL | Single value |
+| `sure_conversations` | Full conversation history (list + messages) | Auto-truncates at ~3.5KB — keeps last 3 convs, 10 msgs each |
+
+**Agentic benefit:** Because state lives in cookies rather than server memory, every preference and conversation is trivially inspectable and modifiable by AI agents. An agent tool can read `document.cookie` or the `cookieStore.getAll()` output to understand the full application state — themes, provider config, and conversation history — without needing server-side MCP tools.
+
+In a production app, replace the inline implementation with sure-state's `createCookieStore`:
+
+```ts
+import { createCookieStore, syncToCookie } from 'sure-state'
+
+const prefs = createCookieStore({
+  prefix: 'myapp_',
+  defaults: { theme: 'nord', language: 'en' },
+})
+```
 
 ### sure-ui — Theme Injection
 
@@ -325,7 +386,7 @@ chatbot/
   package.json     ← depends on sure-gentic, sure-state, sure-ui
   server.js        ← Node.js HTTP server (zero external framework)
   public/
-    index.html     ← single-file frontend (chat UI + settings + themes)
+    index.html     ← single-file frontend (chat UI + settings + themes + cookie persistence)
   tests/
     run_tests.py   ← test runner (starts server, runs tests, cleans up)
     test_chatbot.py ← 21 E2E tests using sure-web-testing BrowserManager

@@ -239,14 +239,55 @@ let config = { provider: 'mock', apiKey: '', model: '', temperature: 0.7, theme:
 let conversations = []
 let activeConversationId = null
 let isLoading = false
+let messagesCache = {}  // conversationId → messages[]
 
-// Restore persisted settings from cookies
+// Restore persisted settings + conversations from cookies
 const saved = cookieStore.getAll({ theme: 'nord' })
 if (saved.theme) config.theme = saved.theme
 if (saved.provider) config.provider = saved.provider
 if (saved.model) config.model = saved.model
 if (saved.temperature) config.temperature = parseFloat(saved.temperature)
 if (saved.baseUrl) config.baseUrl = saved.baseUrl
+
+function saveConversations() {
+  const maxBytes = 3500
+  let payload = JSON.stringify({ list: conversations, messages: messagesCache })
+  if (payload.length > maxBytes) {
+    // Truncate: keep only last 3 conversations, then last 10 messages each
+    conversations = conversations.slice(0, 3)
+    for (const c of conversations) {
+      if (messagesCache[c.id] && messagesCache[c.id].length > 10) {
+        messagesCache[c.id] = messagesCache[c.id].slice(-10)
+      }
+    }
+    payload = JSON.stringify({ list: conversations, messages: messagesCache })
+    if (payload.length > maxBytes) {
+      // Last resort: keep only conversation list, no messages
+      payload = JSON.stringify({ list: conversations, messages: {} })
+    }
+  }
+  cookieStore.set('conversations', payload)
+}
+
+function loadConversationsFromCookie() {
+  const raw = cookieStore.get('conversations')
+  if (!raw) return false
+  try {
+    const data = JSON.parse(raw)
+    if (data.list && Array.isArray(data.list)) {
+      conversations = data.list
+      messagesCache = data.messages || {}
+      return true
+    }
+  } catch (e) { /* corrupted cookie, ignore */ }
+  return false
+}
+
+// Load conversations from cookie first
+if (!loadConversationsFromCookie()) {
+  // Fall back to server on first visit
+  // (no-op — newConversation() will create the first one)
+}
 
 // ── Theme ──
 async function setTheme(name, btn) {
@@ -337,71 +378,92 @@ function updateProviderHint(provider) {
   document.getElementById('providerHint').textContent = hints[provider] || ''
 }
 
-// ── Conversations ──
-async function loadConversations() {
-  try {
-    const res = await fetch('/api/conversations')
-    conversations = await res.json()
-    renderConversations()
-  } catch (e) { console.error('Failed to load conversations:', e) }
+// ── Conversations (cookie-backed — survives page reload, no server dependency) ──
+function renderConversations() {
+  const list = document.getElementById('conversationList')
+  list.innerHTML = conversations.map(c =>
+    `<div class="conversation-item ${c.id === activeConversationId ? 'active' : ''}" onclick="switchConversation('${escHtml(c.id)}')">${escHtml(c.title || 'Chat')}</div>`
+  ).join('')
 }
 
-async function newConversation() {
-  try {
-    const res = await fetch('/api/conversations', { method: 'POST' })
-    const conv = await res.json()
-    conversations.unshift({ id: conv.id, title: conv.title, messageCount: 0, createdAt: Date.now(), lastMessageAt: Date.now() })
-    activeConversationId = conv.id
-    renderConversations()
-    document.getElementById('messages').innerHTML = ''
-    document.getElementById('chatTitle').textContent = 'New chat'
-    document.getElementById('messageInput').focus()
-    document.getElementById('messageInput').disabled = false
-    document.getElementById('sendBtn').disabled = false
-    setStatus('connected', 'Ready')
-  } catch (e) { showToast('error', 'Failed to create conversation') }
+function renderMessages(convId) {
+  const container = document.getElementById('messages')
+  container.innerHTML = ''
+  const msgs = messagesCache[convId] || []
+  for (const m of msgs) {
+    const el = document.createElement('div')
+    el.className = `message ${m.role}`
+    if (m.content.startsWith('Error:')) el.classList.add('error')
+    el.innerHTML = `${escHtml(m.content)}<span class="timestamp">${new Date(m.timestamp).toLocaleTimeString()}</span>`
+    container.appendChild(el)
+  }
+  container.scrollTop = container.scrollHeight
 }
 
 function switchConversation(id) {
   activeConversationId = id
   renderConversations()
-  loadMessages(id)
+  const conv = conversations.find(c => c.id === id)
+  document.getElementById('chatTitle').textContent = conv ? conv.title : 'Chat'
+  renderMessages(id)
+  document.getElementById('messageInput').disabled = false
+  document.getElementById('sendBtn').disabled = false
 }
 
-async function loadMessages(convId) {
-  // For this in-memory demo, messages are sent with the response.
-  // We reload from the conversation list data.
+async function newConversation() {
+  const id = 'conv_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)
+  const conv = { id, title: 'New chat', messageCount: 0, createdAt: Date.now(), lastMessageAt: Date.now() }
+  conversations.unshift(conv)
+  messagesCache[id] = []
+  activeConversationId = id
+  saveConversations()
+  renderConversations()
   document.getElementById('messages').innerHTML = ''
-  document.getElementById('chatTitle').textContent = 'Loading...'
-  // Re-fetch conversations to get latest messages
-  try {
-    const res = await fetch('/api/conversations')
-    const list = await res.json()
-    const conv = list.find(c => c.id === convId)
-    document.getElementById('chatTitle').textContent = conv ? conv.title : 'Chat'
-  } catch (e) {}
-  // Messages are appended client-side as they arrive
+  document.getElementById('chatTitle').textContent = 'New chat'
+  document.getElementById('messageInput').focus()
+  document.getElementById('messageInput').disabled = false
+  document.getElementById('sendBtn').disabled = false
+  setStatus('connected', 'Ready')
 }
 
-function renderConversations() {
-  const list = document.getElementById('conversationList')
-  list.innerHTML = conversations.map(c =>
-    `<div class="conversation-item ${c.id === activeConversationId ? 'active' : ''}" onclick="switchConversation('${c.id}')">${escHtml(c.title || 'Chat')}</div>`
-  ).join('')
+// ── Chat (cookie-backed — messages persist in cookies) ──
+function appendMessage(role, content) {
+  const container = document.getElementById('messages')
+  const el = document.createElement('div')
+  el.className = `message ${role}`
+  if (content.startsWith('Error:')) el.classList.add('error')
+  el.innerHTML = `${escHtml(content)}<span class="timestamp">${new Date().toLocaleTimeString()}</span>`
+  container.appendChild(el)
+  container.scrollTop = container.scrollHeight
 }
 
-// ── Chat ──
+function saveMessage(role, content) {
+  if (!activeConversationId || !messagesCache[activeConversationId]) return
+  const msg = { role, content, timestamp: Date.now() }
+  messagesCache[activeConversationId].push(msg)
+  // Update conversation title from first user message
+  if (role === 'user' && conversations.find(c => c.id === activeConversationId)?.title === 'New chat') {
+    const conv = conversations.find(c => c.id === activeConversationId)
+    if (conv) conv.title = content.slice(0, 50)
+  }
+  saveConversations()
+  renderConversations()
+}
+
 async function sendMessage() {
   const input = document.getElementById('messageInput')
   const text = input.value.trim()
   if (!text || isLoading) return
 
   if (!activeConversationId) {
-    await newConversation()
+    newConversation()
+    // Wait briefly for state to settle
+    await new Promise(r => setTimeout(r, 50))
   }
 
   input.value = ''
   appendMessage('user', text)
+  saveMessage('user', text)
   isLoading = true
   setStatus('loading', 'Thinking...')
   document.getElementById('sendBtn').disabled = true
@@ -416,12 +478,14 @@ async function sendMessage() {
     const data = await res.json()
     if (data.message) {
       appendMessage(data.message.role, data.message.content)
+      saveMessage(data.message.role, data.message.content)
     }
     if (data.error) {
       showToast('error', data.error)
     }
   } catch (e) {
     appendMessage('assistant', 'Error: connection failed')
+    saveMessage('assistant', 'Error: connection failed')
     showToast('error', 'Failed to send message')
   } finally {
     isLoading = false
@@ -429,19 +493,7 @@ async function sendMessage() {
     document.getElementById('sendBtn').disabled = false
     input.disabled = false
     input.focus()
-    // Refresh conversation list to get updated title
-    loadConversations()
   }
-}
-
-function appendMessage(role, content) {
-  const container = document.getElementById('messages')
-  const el = document.createElement('div')
-  el.className = `message ${role}`
-  if (content.startsWith('Error:')) el.classList.add('error')
-  el.innerHTML = `${escHtml(content)}<span class="timestamp">${new Date().toLocaleTimeString()}</span>`
-  container.appendChild(el)
-  container.scrollTop = container.scrollHeight
 }
 
 // ── Notifications (sure-ui style) ──
@@ -457,6 +509,10 @@ function showToast(level, message) {
 
 function clearMessages() {
   document.getElementById('messages').innerHTML = ''
+  if (activeConversationId) {
+    messagesCache[activeConversationId] = []
+    saveConversations()
+  }
 }
 
 // ── Drawer ──
@@ -482,9 +538,22 @@ function escHtml(str) {
 
 // ── Init ──
 loadConfig()
-loadConversations()
-// Create initial conversation
-newConversation()
+
+// Restore conversations from cookie, or start fresh
+if (conversations.length === 0) {
+  newConversation()
+} else {
+  renderConversations()
+  // Switch to most recent conversation
+  activeConversationId = conversations[0].id
+  renderConversations()
+  const conv = conversations[0]
+  document.getElementById('chatTitle').textContent = conv ? conv.title : 'Chat'
+  renderMessages(activeConversationId)
+  document.getElementById('messageInput').disabled = false
+  document.getElementById('sendBtn').disabled = false
+  setStatus('connected', 'Ready')
+}
 </script>
 </body>
 </html>

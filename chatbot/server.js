@@ -218,11 +218,19 @@ const server = http.createServer(async (req, res) => {
         return
       }
 
+      // Ensure conversation exists (client manages state via cookies; server adapts)
+      let conv = conversations.find(c => c.id === conversationId)
+      if (!conv) {
+        conv = { id: conversationId, title: message.slice(0, 50), messages: [], createdAt: Date.now() }
+        conversations.push(conv)
+        if (conversations.length > 50) conversations = conversations.slice(-50)
+      }
+
       // Add user message
       addMessage(conversationId, 'user', message)
 
       // Build conversation history for LLM
-      const conv = conversations.find(c => c.id === conversationId)
+      conv = conversations.find(c => c.id === conversationId)
       const messages = conv.messages.map(m => ({ role: m.role, content: m.content }))
 
       // Call LLM via sure-gentic Agent + Skill
