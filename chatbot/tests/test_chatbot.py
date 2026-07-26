@@ -102,10 +102,13 @@ def run_all_tests(mgr):
     # ── 21. Verify the new conversation state ──
     step('verify new conversation', lambda: _check_new_conversation(mgr))
 
-    # ── 22. Final screenshot ──
+    # ── 22. Preview panel test ──
+    step('preview panel', lambda: test_preview_panel(mgr))
+
+    # ── 23. Final screenshot ──
     step('screenshot final', lambda: mgr.screenshot())
 
-    # ── 23. Close browser ──
+    # ── 24. Close browser ──
     step('close', lambda: mgr.close())
 
     return results
@@ -281,6 +284,22 @@ def _check_new_conversation(mgr):
     input_present = 'messageInput' in html or 'Type a message' in html
     assert input_present, 'Message input not found after new conversation'
     return {'input_present': input_present}
+
+
+def test_preview_panel(mgr):
+    # Login
+    mgr.fill('#loginEmail', 'demo@example.com')
+    mgr.fill('#loginPassword', 'demo')
+    mgr.click('#loginBtn')
+    time.sleep(0.5)
+    # Open preview panel
+    mgr.click('button[title="Preview panel"]')
+    time.sleep(0.3)
+    dom = mgr.get_dom()
+    assert 'preview-panel' in dom['data']['html'], 'Preview panel not found'
+    # Check settings panel renders
+    assert 'LLM Provider' in dom['data']['html'], 'Settings panel content not found'
+    return True
 
 
 def print_summary(results):

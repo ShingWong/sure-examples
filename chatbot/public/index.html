@@ -89,6 +89,16 @@
   .toast.success { background: var(--success); color: #fff; }
   .toast.info { background: var(--accent); color: #fff; }
   @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* ── Preview panel ── */
+  .preview-panel { position:fixed; top:0; right:0; bottom:0; width:400px; max-width:90vw; background:var(--surface); border-left:1px solid var(--border); z-index:90; display:flex; flex-direction:column; transform:translateX(100%); transition:transform 0.3s; }
+  .preview-panel.open { transform:translateX(0); }
+  .preview-panel__header { padding:0.75rem 1rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .preview-panel__title { font-size:0.875rem; font-weight:600; }
+  .preview-panel__close { background:none; border:none; cursor:pointer; color:var(--muted); font-size:1.25rem; }
+  .preview-panel__body { flex:1; overflow-y:auto; padding:1rem; }
+  .preview-panel__body svg { max-width:100%; height:auto; }
+  .preview-panel iframe { width:100%; height:100%; border:none; border-radius:6px; }
 </style>
 </head>
 <body>
@@ -137,7 +147,10 @@
   <div class="main">
     <div class="chat-header">
       <h2 id="chatTitle">New chat</h2>
-      <button class="btn-icon" onclick="clearMessages()" title="Clear messages">🗑</button>
+      <div style="display:flex;gap:0.25rem">
+        <button class="btn-icon" onclick="togglePreviewPanel()" title="Preview panel">▶</button>
+        <button class="btn-icon" onclick="clearMessages()" title="Clear messages">🗑</button>
+      </div>
     </div>
     <div class="messages" id="messages"></div>
     <div class="input-area">
@@ -227,6 +240,15 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- Preview panel -->
+<div class="preview-panel" id="previewPanel">
+  <div class="preview-panel__header">
+    <span class="preview-panel__title" id="panelTitle">Settings</span>
+    <button class="preview-panel__close" onclick="togglePreviewPanel()">✕</button>
+  </div>
+  <div class="preview-panel__body" id="panelBody"></div>
 </div>
 
 <!-- Toast container -->
@@ -654,9 +676,81 @@ async function register() {
   }
 }
 
+// ── Preview Panel ──
+let panelState = { mode: 'settings', contentType: '', content: '', title: 'Settings' }
+
+async function loadPanelState() {
+  try {
+    const res = await fetch('/api/panel')
+    panelState = await res.json()
+    renderPanel()
+  } catch (e) { console.error('Panel state load failed:', e) }
+}
+
+async function savePanelState(update) {
+  Object.assign(panelState, update)
+  try {
+    await fetch('/api/panel', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(panelState) })
+  } catch (e) { console.error('Panel state save failed:', e) }
+  renderPanel()
+}
+
+function togglePreviewPanel() {
+  document.getElementById('previewPanel').classList.toggle('open')
+}
+
+function renderPanel() {
+  document.getElementById('panelTitle').textContent = panelState.title || 'Panel'
+  const body = document.getElementById('panelBody')
+  if (!body) return
+
+  switch (panelState.mode) {
+    case 'preview':
+      if (panelState.contentType === 'svg') {
+        body.innerHTML = `<div style="padding:1rem;text-align:center">${panelState.content}</div>`
+      } else if (panelState.contentType === 'html') {
+        body.innerHTML = `<iframe sandbox="allow-scripts" srcdoc="${escHtml(panelState.content)}"></iframe>`
+      } else {
+        body.innerHTML = `<pre style="white-space:pre-wrap;font-size:0.8125rem">${escHtml(panelState.content || '')}</pre>`
+      }
+      break
+    case 'settings':
+      body.innerHTML = renderSettingsPanel()
+      break
+    default:
+      body.innerHTML = `<p style="color:var(--muted)">${panelState.content || 'No content'}</p>`
+  }
+}
+
+function renderSettingsPanel() {
+  return `
+    <div class="field"><label>LLM Provider</label>
+      <select id="provider" onchange="onConfigChange()">
+        <option value="mock">Mock</option>
+        <option value="openai">OpenAI</option>
+        <option value="anthropic">Anthropic</option>
+        <option value="google">Google Gemini</option>
+        <option value="openai-compatible">OpenAI-compatible</option>
+      </select>
+    </div>
+    <div class="field"><label>Model</label>
+      <input type="text" id="model" placeholder="auto" onchange="onConfigChange()">
+    </div>
+    <div class="field"><label>Temperature: <span id="tempValue">0.7</span></label>
+      <input type="range" id="temperature" min="0" max="2" step="0.1" value="0.7">
+    </div>
+    <div class="theme-grid" style="display:flex;gap:0.5rem">
+      <button class="theme-btn active" data-theme="nord" onclick="setTheme('nord',this)" style="flex:1">Nord</button>
+      <button class="theme-btn" data-theme="forest" onclick="setTheme('forest',this)" style="flex:1">Forest</button>
+      <button class="theme-btn" data-theme="dracula" onclick="setTheme('dracula',this)" style="flex:1">Dracula</button>
+    </div>
+  `
+}
+
 // ── Init ──
 ;(async () => {
   loadConfig()
+  loadPanelState()
   const authed = await checkSession()
   if (authed) {
     document.getElementById('authPage').style.display = 'none'

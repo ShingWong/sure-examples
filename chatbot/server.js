@@ -166,6 +166,35 @@ function addMessage(conversationId, role, content) {
   return message
 }
 
+// ── GenerateContentSkill (used for SVG/HTML generation) ──
+class GenerateContentSkill extends BaseSkill {
+  name = 'generate_content'
+  description = 'Generate SVG, HTML, or markdown content'
+  async execute(ctx) {
+    const result = await this.callLLM(this.agent, [
+      { role: 'system', content: `You generate content based on user requests. 
+If the user asks for an SVG, output the SVG code wrapped in \`\`\`svg...\`\`\`.
+If the user asks for HTML, output the full HTML wrapped in \`\`\`html...\`\`\`.
+Always produce complete, working code.` },
+      { role: 'user', content: ctx.prompt },
+    ])
+    // Detect content type
+    const svgMatch = result.match(/```svg\n?([\s\S]*?)```/)
+    const htmlMatch = result.match(/```html\n?([\s\S]*?)```/)
+    if (svgMatch) {
+      panelState = { mode: 'preview', contentType: 'svg', content: svgMatch[1].trim(), title: 'SVG Preview', updatedAt: Date.now() }
+    } else if (htmlMatch) {
+      panelState = { mode: 'preview', contentType: 'html', content: htmlMatch[1].trim(), title: 'HTML Preview', updatedAt: Date.now() }
+    } else {
+      panelState = { mode: 'preview', contentType: 'text', content: result, title: 'Content', updatedAt: Date.now() }
+    }
+    return { success: true, data: result, panelState }
+  }
+}
+
+// ── Panel state (preview panel content) ──
+let panelState = { mode: 'settings', contentType: '', content: '', title: 'Settings' }
+
 // ── HTTP Router ──
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
@@ -199,6 +228,22 @@ const server = http.createServer(async (req, res) => {
       agent = await getAgent(currentConfig)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ ok: true, config: currentConfig }))
+      return
+    }
+
+    // GET /api/panel — get panel state
+    if (req.method === 'GET' && pathname === '/api/panel') {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(panelState))
+      return
+    }
+
+    // POST /api/panel — update panel state
+    if (req.method === 'POST' && pathname === '/api/panel') {
+      const body = await parseBody(req)
+      Object.assign(panelState, body)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify(panelState))
       return
     }
 
@@ -318,6 +363,19 @@ const server = http.createServer(async (req, res) => {
       // Call LLM via sure-gentic Agent + Skill
       try {
         if (!agent) agent = await getAgent(currentConfig)
+
+        // Content generation detection (SVG, HTML, etc.)
+        const lowerMsg = message.toLowerCase()
+        if (lowerMsg.includes('svg') || lowerMsg.includes('logo') || lowerMsg.includes('html') || lowerMsg.includes('page') || lowerMsg.includes('quiz')) {
+          const skill = new GenerateContentSkill()
+          const result = await agent.run(skill, { prompt: message })
+          const reply = addMessage(conversationId, 'assistant', result.data?.substring(0, 500) || result.data || 'Generated')
+          // Update panel via API
+          try { await fetch(`http://localhost:${PORT}/api/panel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(panelState) }) } catch {}
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ message: reply, panelState }))
+          return
+        }
 
         // Using sure-gentic's BaseSkill pattern
         class ChatSkill extends BaseSkill {
