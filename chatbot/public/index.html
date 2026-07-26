@@ -100,8 +100,8 @@
     </div>
     <div id="authAlert"></div>
     <div style="background:var(--highlight);border-radius:8px;padding:0.75rem 1rem;margin-bottom:1.25rem;font-size:0.8125rem">
-      <strong>Demo mode:</strong> Sign in with <code>demo@example.com</code> / <code>demo</code><br>
-      Or <a href="#" onclick="showRegister()" style="color:var(--accent)">create your own account</a>
+      <strong>Demo mode</strong> — <a href="#" onclick="fillDemo()" style="color:var(--accent);text-decoration:underline;cursor:pointer">click here to sign in instantly</a><br>
+      <span style="color:var(--muted)">Or register a new account below.</span>
     </div>
     <div class="sure-auth__field">
       <label class="sure-auth__label">Email</label>
@@ -111,7 +111,12 @@
       <label class="sure-auth__label">Password</label>
       <input class="sure-auth__input" id="loginPassword" type="password" placeholder="demo" autocomplete="current-password">
     </div>
-    <button class="sure-auth__btn" id="loginBtn" onclick="login()">Sign In</button>
+    <div class="sure-auth__field">
+      <button class="sure-auth__btn" id="loginBtn" onclick="login()">Sign In</button>
+    </div>
+    <div class="sure-auth__footer">
+      <a href="#" onclick="showRegister()">Create an account</a>
+    </div>
   </div>
 </div>
 
@@ -574,6 +579,16 @@ async function checkSession() {
   } catch {}
   return false
 }
+
+function fillDemo() {
+  document.getElementById('loginEmail').value = 'demo@example.com'
+  document.getElementById('loginPassword').value = 'demo'
+  login()
+}
+
+document.getElementById('loginPassword')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') login()
+})
 
 async function login() {
   const email = document.getElementById('loginEmail').value
