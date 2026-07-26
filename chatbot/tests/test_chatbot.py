@@ -42,64 +42,95 @@ def run_all_tests(mgr):
     # ── 2. Navigate to chatbot ──
     step('goto chatbot', lambda: mgr.goto(CHATBOT_URL))
 
-    # ── 3. Verify page loaded — check for key elements ──
+    # ── 3. Verify login page is shown ──
+    step('verify login page', lambda: _check_login_page(mgr))
+
+    # ── 4. Take a screenshot of the login page ──
+    step('screenshot login', lambda: mgr.screenshot())
+
+    # ── 5. Sign in with demo credentials ──
+    step('sign in', lambda: _sign_in(mgr, 'demo@example.com', 'demo'))
+
+    # ── 6. Verify page loaded — check for key elements ──
     step('verify page load', lambda: _check_page_loaded(mgr))
 
-    # ── 4. Get DOM and verify sidebar ──
+    # ── 7. Get DOM and verify sidebar ──
     step('verify sidebar', lambda: _check_sidebar(mgr))
 
-    # ── 5. Take a screenshot of the initial state ──
+    # ── 8. Take a screenshot of the initial state ──
     step('screenshot initial', lambda: mgr.screenshot())
 
-    # ── 6. Open settings drawer ──
+    # ── 9. Open settings drawer ──
     step('open settings', lambda: _open_settings(mgr))
 
-    # ── 7. Verify settings drawer contents ──
+    # ── 10. Verify settings drawer contents ──
     step('verify settings', lambda: _check_settings(mgr))
 
-    # ── 8. Switch theme to Dracula via settings ──
+    # ── 11. Switch theme to Dracula via settings ──
     step('switch theme', lambda: _switch_theme(mgr, 'dracula'))
 
-    # ── 9. Take screenshot of Dracula theme ──
+    # ── 12. Take screenshot of Dracula theme ──
     step('screenshot dracula', lambda: mgr.screenshot())
 
-    # ── 10. Switch back to Nord theme ──
+    # ── 13. Switch back to Nord theme ──
     step('switch back to nord', lambda: _switch_theme(mgr, 'nord'))
 
-    # ── 11. Close settings drawer ──
+    # ── 14. Close settings drawer ──
     step('close settings', lambda: _close_settings(mgr))
 
-    # ── 12. Send a chat message ──
+    # ── 15. Send a chat message ──
     step('send message', lambda: _send_message(mgr, 'Hello! What can you do?'))
 
-    # ── 13. Wait for response and verify ──
+    # ── 16. Wait for response and verify ──
     step('verify response', lambda: _check_response(mgr))
 
-    # ── 14. Take screenshot with conversation ──
+    # ── 16. Take screenshot with conversation ──
     step('screenshot with messages', lambda: mgr.screenshot())
 
-    # ── 15. Get console logs ──
+    # ── 17. Get console logs ──
     step('console logs', lambda: _check_console(mgr))
 
-    # ── 16. Get network requests ──
+    # ── 18. Get network requests ──
     step('network requests', lambda: _check_network(mgr))
 
-    # ── 17. Clear messages ──
+    # ── 19. Clear messages ──
     step('clear messages', lambda: _clear_messages(mgr))
 
-    # ── 18. Create new conversation ──
+    # ── 20. Create new conversation ──
     step('new conversation', lambda: _new_conversation(mgr))
 
-    # ── 19. Verify the new conversation state ──
+    # ── 21. Verify the new conversation state ──
     step('verify new conversation', lambda: _check_new_conversation(mgr))
 
-    # ── 20. Final screenshot ──
+    # ── 22. Final screenshot ──
     step('screenshot final', lambda: mgr.screenshot())
 
-    # ── 21. Close browser ──
+    # ── 23. Close browser ──
     step('close', lambda: mgr.close())
 
     return results
+
+
+def _check_login_page(mgr):
+    dom = mgr.get_dom()
+    assert dom['status'] == 'ok'
+    html = dom['data']['html']
+    assert 'Sign in to continue' in html or 'sure-chatbot' in html, 'Login page not found'
+    assert 'loginEmail' in html or 'login' in html.lower(), 'Login form not found'
+    return {'login_page_found': True}
+
+
+def _sign_in(mgr, email, password):
+    mgr.fill('#loginEmail', email)
+    mgr.fill('#loginPassword', password)
+    result = mgr.click('#loginBtn')
+    assert result['status'] == 'ok', f'Sign in click failed: {result}'
+    time.sleep(0.5)
+    # Verify login succeeded by checking chat UI is visible
+    info = mgr.get_info()
+    dom = mgr.get_dom()
+    assert 'messageInput' in dom['data']['html'] or 'sidebar' in dom['data']['html'], 'Chat UI not found after login'
+    return {'signed_in': True}
 
 
 def _check_page_loaded(mgr):

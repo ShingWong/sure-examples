@@ -9,6 +9,7 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
   a { color: var(--accent); }
+  #authPage { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem; }
 
   /* ── Layout ── */
   .app { display: flex; height: 100vh; overflow: hidden; }
@@ -91,23 +92,26 @@
 </style>
 </head>
 <body>
-<div id="authPage" class="sure-auth__form" style="display:none">
-  <div class="sure-auth__header">
-    <h1>sure-chatbot</h1>
-    <p>Sign in to continue</p>
-  </div>
-  <div id="authAlert"></div>
-  <div class="sure-auth__field">
-    <label class="sure-auth__label">Email</label>
-    <input class="sure-auth__input" id="loginEmail" type="email" placeholder="demo@example.com" autocomplete="email">
-  </div>
-  <div class="sure-auth__field">
-    <label class="sure-auth__label">Password</label>
-    <input class="sure-auth__input" id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password">
-  </div>
-  <button class="sure-auth__btn" id="loginBtn" onclick="login()">Sign In</button>
-  <div class="sure-auth__footer">
-    Don't have an account? <a href="#" onclick="showRegister()">Register</a>
+<div id="authPage" style="display:none">
+  <div class="sure-auth__form">
+    <div class="sure-auth__header">
+      <h1>sure-chatbot</h1>
+      <p>Configure LLM providers, send messages, switch themes</p>
+    </div>
+    <div id="authAlert"></div>
+    <div style="background:var(--highlight);border-radius:8px;padding:0.75rem 1rem;margin-bottom:1.25rem;font-size:0.8125rem">
+      <strong>Demo mode:</strong> Sign in with <code>demo@example.com</code> / <code>demo</code><br>
+      Or <a href="#" onclick="showRegister()" style="color:var(--accent)">create your own account</a>
+    </div>
+    <div class="sure-auth__field">
+      <label class="sure-auth__label">Email</label>
+      <input class="sure-auth__input" id="loginEmail" type="email" placeholder="demo@example.com" autocomplete="email">
+    </div>
+    <div class="sure-auth__field">
+      <label class="sure-auth__label">Password</label>
+      <input class="sure-auth__input" id="loginPassword" type="password" placeholder="demo" autocomplete="current-password">
+    </div>
+    <button class="sure-auth__btn" id="loginBtn" onclick="login()">Sign In</button>
   </div>
 </div>
 
@@ -595,34 +599,28 @@ async function login() {
 }
 
 function showRegister() {
-  document.getElementById('authPage').innerHTML = `
-    <div class="sure-auth__header">
-      <h1>Create Account</h1>
-      <p>Enter your details to get started</p>
-    </div>
-    <div id="authAlert"></div>
-    <div class="sure-auth__field">
-      <label class="sure-auth__label">Email</label>
-      <input class="sure-auth__input" id="regEmail" type="email" placeholder="you@example.com">
-    </div>
-    <div class="sure-auth__field">
-      <label class="sure-auth__label">Password</label>
-      <input class="sure-auth__input" id="regPassword" type="password" placeholder="At least 4 characters">
-    </div>
-    <button class="sure-auth__btn" onclick="register()">Create Account</button>
-    <div class="sure-auth__footer">
-      Already have an account? <a href="#" onclick="showLogin()">Sign in</a>
-    </div>
-  `
+  document.getElementById('authPage').innerHTML = '<div class="sure-auth__form">' +
+    '<div class="sure-auth__header"><h1>Create Account</h1><p>Enter your details to get started</p></div>' +
+    '<div id="authAlert"></div>' +
+    '<div class="sure-auth__field"><label class="sure-auth__label">Email</label>' +
+    '<input class="sure-auth__input" id="regEmail" type="email" placeholder="you@example.com"></div>' +
+    '<div class="sure-auth__field"><label class="sure-auth__label">Password</label>' +
+    '<input class="sure-auth__input" id="regPassword" type="password" placeholder="At least 4 characters">' +
+    '<span class="sure-auth__help">Minimum 4 characters. Numbers and letters mix recommended.</span></div>' +
+    '<button class="sure-auth__btn" onclick="register()">Create Account</button>' +
+    '<div class="sure-auth__footer">Already have an account? <a href="#" onclick="showLogin()">Sign in</a></div>' +
+  '</div>'
 }
 
 function showLogin() {
-  location.reload()  // Simple reload to reset the auth page
+  location.reload()
 }
 
 async function register() {
   const email = document.getElementById('regEmail').value
   const password = document.getElementById('regPassword').value
+  const btn = document.querySelector('.sure-auth__btn')
+  btn.disabled = true; btn.textContent = 'Creating account...'
   try {
     const res = await fetch('/api/auth/register', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -636,6 +634,8 @@ async function register() {
     initChat()
   } catch (e) {
     showToast('error', e.message)
+  } finally {
+    btn.disabled = false; btn.textContent = 'Create Account'
   }
 }
 
@@ -648,7 +648,7 @@ async function register() {
     document.getElementById('app').style.display = 'flex'
     initChat()
   } else {
-    document.getElementById('authPage').style.display = 'block'
+    document.getElementById('authPage').style.display = 'flex'
     document.getElementById('app').style.display = 'none'
   }
 })()
