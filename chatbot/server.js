@@ -225,7 +225,7 @@ Always produce complete, working code.` },
 }
 
 // ── Panel state (preview panel content) ──
-let panelState = { mode: 'settings', contentType: '', content: '', title: 'Settings' }
+let panelState = { mode: 'preview', contentType: '', content: '', title: 'Content Preview' }
 
 // ── HTTP Router ──
 const server = http.createServer(async (req, res) => {
