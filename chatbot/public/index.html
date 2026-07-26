@@ -24,6 +24,17 @@
   .conversation-item:hover { background: var(--highlight); }
   .conversation-item.active { background: var(--accent); color: #fff; }
 
+  /* ── Persona Card ── */
+  .persona-card { display:flex; align-items:center; gap:0.625rem; padding:0.5rem 0.75rem; border-radius:8px; cursor:pointer; transition:background 0.15s; }
+  .persona-card:hover { background:var(--highlight); }
+  .persona-card.active { background:var(--accent); color:#fff; }
+  .persona-card__avatar { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:700; color:#fff; flex-shrink:0; }
+  .persona-card__info { flex:1; min-width:0; }
+  .persona-card__name { font-size:0.8125rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .persona-card__desc { font-size:0.6875rem; color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .persona-search { padding:0.5rem 0.75rem; margin-bottom:0.5rem; }
+  .persona-search input { width:100%; padding:0.375rem 0.5rem; border:1px solid var(--border); border-radius:6px; font-size:0.8125rem; background:var(--bg); color:var(--text); outline:none; }
+
   /* ── Chat area ── */
   .chat-header { padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--surface); }
   .chat-header h2 { font-size: 1rem; font-weight: 600; }
@@ -134,19 +145,28 @@
   <!-- Sidebar -->
   <aside class="sidebar">
     <div class="sidebar-header">
-      <h1>sure-chatbot</h1>
+      <h1>persona-bot</h1>
       <button class="btn-icon" onclick="newConversation()" title="New chat">+</button>
     </div>
-    <div class="conversation-list" id="conversationList"></div>
+    <div class="persona-search">
+      <input type="text" id="personaSearch" placeholder="Search personas..." oninput="filterPersonas(this.value)">
+    </div>
+    <div class="conversation-list" id="personaList"></div>
     <div style="padding:0.5rem; border-top:1px solid var(--border)">
-      <button class="btn btn-secondary" style="width:100%" onclick="toggleDrawer()">⚙ Settings</button>
+      <button class="btn btn-secondary" style="width:100%" onclick="openPersonaEditor()">+ New Persona</button>
+    </div>
+    <div style="padding:0 0.5rem 0.5rem">
+      <button class="btn btn-secondary" style="width:100%" onclick="togglePreviewPanel()">⚙ Settings</button>
     </div>
   </aside>
 
   <!-- Main chat area -->
   <div class="main">
     <div class="chat-header">
-      <h2 id="chatTitle">New chat</h2>
+      <div style="display:flex;align-items:center;gap:0.5rem">
+        <div class="persona-card__avatar" id="chatAvatar" style="width:28px;height:28px;font-size:0.625rem">SA</div>
+        <h2 id="chatTitle">Support Agent</h2>
+      </div>
       <div style="display:flex;gap:0.25rem">
         <button class="btn-icon" onclick="togglePreviewPanel()" title="Preview panel">▶</button>
         <button class="btn-icon" onclick="clearMessages()" title="Clear messages">🗑</button>
@@ -292,6 +312,14 @@ let activeConversationId = null
 let isLoading = false
 let messagesCache = {}  // conversationId → messages[]
 
+// ── Personas ──
+let personas = [
+  { id: '1', name: 'Support Agent', description: 'Helpful customer support', color: '#5e81ac', prompt: 'You are a helpful support agent...', model: 'gpt-4o', temperature: 0.7 },
+  { id: '2', name: 'Code Reviewer', description: 'Reviews code and suggests improvements', color: '#a3be8c', prompt: 'You are an expert code reviewer...', model: 'gpt-4o', temperature: 0.3 },
+  { id: '3', name: 'Creative Writer', description: 'Helps with creative writing', color: '#b48ead', prompt: 'You are a creative writing assistant...', model: 'gpt-4o', temperature: 0.9 },
+]
+let activePersonaId = '1'
+
 // Restore persisted settings + conversations from cookies
 const saved = cookieStore.getAll({ theme: 'nord' })
 if (saved.theme) config.theme = saved.theme
@@ -432,6 +460,7 @@ function updateProviderHint(provider) {
 // ── Conversations (cookie-backed — survives page reload, no server dependency) ──
 function renderConversations() {
   const list = document.getElementById('conversationList')
+  if (!list) return
   list.innerHTML = conversations.map(c =>
     `<div class="conversation-item ${c.id === activeConversationId ? 'active' : ''}" onclick="switchConversation('${escHtml(c.id)}')">${escHtml(c.title || 'Chat')}</div>`
   ).join('')
@@ -475,6 +504,61 @@ async function newConversation() {
   document.getElementById('messageInput').disabled = false
   document.getElementById('sendBtn').disabled = false
   setStatus('connected', 'Ready')
+}
+
+// ── Persona rendering ──
+function renderPersonas(filter) {
+  const list = document.getElementById('personaList')
+  const filtered = filter ? personas.filter(p => p.name.toLowerCase().includes(filter.toLowerCase())) : personas
+  list.innerHTML = filtered.map(p => `
+    <div class="persona-card ${p.id === activePersonaId ? 'active' : ''}" onclick="selectPersona('${p.id}')">
+      <div class="persona-card__avatar" style="background:${p.color}">${p.name.split(' ').map(w => w[0]).join('').slice(0,2)}</div>
+      <div class="persona-card__info">
+        <div class="persona-card__name">${escHtml(p.name)}</div>
+        <div class="persona-card__desc">${escHtml(p.description)}</div>
+      </div>
+    </div>
+  `).join('')
+}
+
+function selectPersona(id) {
+  activePersonaId = id
+  renderPersonas(document.getElementById('personaSearch')?.value)
+  const p = personas.find(p => p.id === id)
+  if (p) {
+    document.getElementById('chatTitle').textContent = p.name
+    const avatar = document.getElementById('chatAvatar')
+    if (avatar) {
+      avatar.style.background = p.color
+      avatar.textContent = p.name.split(' ').map(w => w[0]).join('').slice(0,2)
+    }
+  }
+}
+
+function filterPersonas(query) { renderPersonas(query) }
+
+function openPersonaEditor(persona) {
+  savePanelState({ mode: 'editor', title: persona ? 'Edit Persona' : 'New Persona', entityId: persona?.id })
+  togglePreviewPanel()
+}
+
+function savePersona() {
+  const name = document.getElementById('peName').value.trim()
+  if (!name) { showToast('error', 'Name is required'); return }
+  const data = {
+    name, description: document.getElementById('peDesc').value.trim(),
+    color: document.getElementById('peColor').value,
+    prompt: document.getElementById('pePrompt').value,
+    model: document.getElementById('peModel').value || 'gpt-4o',
+    temperature: parseFloat(document.getElementById('peTemp').value) || 0.7,
+  }
+  const existing = personas.find(p => p.id === panelState.entityId)
+  if (existing) { Object.assign(existing, data) }
+  else { data.id = String(Date.now()); personas.push(data) }
+  renderPersonas()
+  const saved = existing || personas[personas.length - 1]
+  savePanelState({ mode: 'detail', title: 'Persona Detail', entityId: saved.id })
+  showToast('success', existing ? 'Persona updated' : 'Persona created')
 }
 
 // ── Chat (cookie-backed — messages persist in cookies) ──
@@ -717,6 +801,42 @@ function renderPanel() {
     case 'settings':
       body.innerHTML = renderSettingsPanel()
       break
+    case 'detail':
+      const pd = personas.find(p => p.id === panelState.entityId)
+      if (!pd) { body.innerHTML = '<p>Persona not found</p>'; break }
+      body.innerHTML = `
+        <div style="text-align:center;margin-bottom:1rem">
+          <div style="width:48px;height:48px;border-radius:50%;background:${pd.color};color:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto 0.5rem;font-size:1.125rem;font-weight:700">${pd.name.split(' ').map(w => w[0]).join('').slice(0,2)}</div>
+          <h3 style="font-size:1rem;font-weight:700">${escHtml(pd.name)}</h3>
+          <p style="font-size:0.8125rem;color:var(--muted)">${escHtml(pd.description)}</p>
+        </div>
+        <div class="field"><label>System Prompt</label><div style="font-size:0.8125rem;line-height:1.5">${escHtml(pd.prompt)}</div></div>
+        <div style="display:flex;gap:0.5rem;margin:0.5rem 0">
+          <div class="field" style="flex:1"><label>Model</label><div style="font-size:0.875rem;font-weight:600">${escHtml(pd.model)}</div></div>
+          <div class="field" style="flex:1"><label>Temperature</label><div style="font-size:0.875rem;font-weight:600">${pd.temperature}</div></div>
+        </div>
+        <div style="display:flex;gap:0.5rem;margin-top:1rem">
+          <button class="btn btn-primary" style="flex:1" onclick="openPersonaEditor(personas.find(p=>p.id==='${pd.id}'))">Edit</button>
+          <button class="btn btn-secondary" style="flex:1" onclick="if(confirm('Delete ${escHtml(pd.name)}?')) { personas=personas.filter(p=>p.id!=='${pd.id}'); renderPersonas(); savePanelState({mode:'settings',title:'Settings'}); }">Delete</button>
+        </div>`
+      break
+    case 'editor':
+      const pe = personas.find(p => p.id === panelState.entityId)
+      body.innerHTML = `
+        <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem">${pe ? 'Edit Persona' : 'New Persona'}</h3>
+        <div class="field"><label>Name</label><input class="sure-auth__input" id="peName" value="${pe ? escHtml(pe.name) : ''}"></div>
+        <div class="field"><label>Description</label><input class="sure-auth__input" id="peDesc" value="${pe ? escHtml(pe.description) : ''}"></div>
+        <div class="field"><label>Avatar Color</label><input type="color" id="peColor" value="${pe ? pe.color : '#5e81ac'}" style="width:100%;height:40px;border-radius:6px;cursor:pointer"></div>
+        <div class="field"><label>System Prompt</label><textarea class="sure-auth__input" id="pePrompt" rows="4">${pe ? escHtml(pe.prompt) : ''}</textarea></div>
+        <div style="display:flex;gap:0.5rem">
+          <div class="field" style="flex:1"><label>Model</label><input class="sure-auth__input" id="peModel" value="${pe ? escHtml(pe.model) : 'gpt-4o'}"></div>
+          <div class="field" style="flex:1"><label>Temperature</label><input class="sure-auth__input" id="peTemp" type="number" step="0.1" min="0" max="2" value="${pe ? pe.temperature : 0.7}"></div>
+        </div>
+        <div style="display:flex;gap:0.5rem;margin-top:1rem">
+          <button class="btn btn-primary" style="flex:1" onclick="savePersona()">Save</button>
+          <button class="btn btn-secondary" style="flex:1" onclick="savePanelState({mode:'detail',title:'Persona Detail',entityId:'${pe?.id || ''}'})">Cancel</button>
+        </div>`
+      break
     default:
       body.innerHTML = `<p style="color:var(--muted)">${panelState.content || 'No content'}</p>`
   }
@@ -763,6 +883,7 @@ function renderSettingsPanel() {
 })()
 
 function initChat() {
+  renderPersonas()
   if (conversations.length === 0) {
     newConversation()
   } else {

@@ -105,10 +105,13 @@ def run_all_tests(mgr):
     # ── 22. Preview panel test ──
     step('preview panel', lambda: test_preview_panel(mgr))
 
-    # ── 23. Final screenshot ──
+    # ── 23. Persona CRUD test ──
+    step('persona CRUD', lambda: test_persona_crud(mgr))
+
+    # ── 24. Final screenshot ──
     step('screenshot final', lambda: mgr.screenshot())
 
-    # ── 24. Close browser ──
+    # ── 25. Close browser ──
     step('close', lambda: mgr.close())
 
     return results
@@ -151,7 +154,7 @@ def _check_sidebar(mgr):
     dom = mgr.get_dom()
     assert dom['status'] == 'ok'
     html = dom['data']['html']
-    assert 'sure-chatbot' in html, 'Sidebar header missing'
+    assert 'persona-bot' in html, 'Sidebar header missing'
     assert 'Settings' in html, 'Settings button missing'
     # Verify the chat input exists
     assert 'messageInput' in html or 'Type a message' in html, 'Chat input missing'
@@ -299,6 +302,23 @@ def test_preview_panel(mgr):
     assert 'preview-panel' in dom['data']['html'], 'Preview panel not found'
     # Check settings panel renders
     assert 'LLM Provider' in dom['data']['html'], 'Settings panel content not found'
+    return True
+
+
+def test_persona_crud(mgr):
+    # Login
+    mgr.fill('#loginEmail', 'demo@example.com')
+    mgr.fill('#loginPassword', 'demo')
+    mgr.click('#loginBtn')
+    time.sleep(0.5)
+    # Verify persona list
+    dom = mgr.get_dom()
+    assert 'persona-card' in dom['data']['html'], 'Persona cards not found'
+    # Create new persona
+    mgr.click('button:has-text("+ New Persona")')
+    time.sleep(0.3)
+    dom = mgr.get_dom()
+    assert 'peName' in dom['data']['html'], 'Persona editor not opened'
     return True
 
 
