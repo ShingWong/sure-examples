@@ -33,6 +33,18 @@ function parseBody(req) {
   })
 }
 
+// ── Helper: cookie parser ──
+function parseCookies(cookieHeader) {
+  const result = {}
+  if (!cookieHeader) return result
+  cookieHeader.split(';').forEach(pair => {
+    const eq = pair.indexOf('=')
+    if (eq === -1) return
+    result[pair.slice(0, eq).trim()] = decodeURIComponent(pair.slice(eq + 1).trim())
+  })
+  return result
+}
+
 // ── Helper: serve static file ──
 function serveStatic(res, filePath) {
   const ext = path.extname(filePath).toLowerCase()
@@ -73,6 +85,19 @@ let currentConfig = {
   theme: 'nord',
   baseUrl: '',
   label: '',
+}
+
+// ── Auth (built-in SimpleAuth via sure-state) ──
+
+const auth = createSimpleAuth({
+  passwordPolicy: { minLength: 4, requireUpper: false, requireDigit: false },
+  rateLimit: { maxAttempts: 5, windowMs: 60000, banMs: 60000 },
+  cookies: { name: 'sure_session', path: '/', secure: false },
+})
+
+// Auto-create demo user in mock mode
+if (currentConfig.provider === 'mock') {
+  auth.register({ email: 'demo@example.com', password: 'demo' }).catch(() => {})
 }
 
 // ── sure-gentic integration ──
@@ -121,7 +146,7 @@ async function getAgent(config) {
 // (In a real app, use createEntityStore from sure-state with an API adapter)
 // Here we use a simple mutable store for the in-memory example.
 // The same pattern scales to sure-state's createEntityStore when adding persistence.
-import { createEventBus } from 'sure-state'
+import { createEventBus, createSimpleAuth } from 'sure-state'
 
 const bus = createEventBus()
 bus.on('action', (record) => console.log('[store]', record.kind, record.detail || ''))
@@ -174,6 +199,63 @@ const server = http.createServer(async (req, res) => {
       agent = await getAgent(currentConfig)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ ok: true, config: currentConfig }))
+      return
+    }
+
+    // ── Auth routes ──
+
+    // POST /api/auth/register
+    if (req.method === 'POST' && pathname === '/api/auth/register') {
+      const body = await parseBody(req)
+      try {
+        const session = await auth.register({ email: body.email, password: body.password })
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ identity: session.identity }))
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: err.message }))
+      }
+      return
+    }
+
+    // POST /api/auth/login
+    if (req.method === 'POST' && pathname === '/api/auth/login') {
+      const body = await parseBody(req)
+      try {
+        const session = await auth.login({ email: body.email, password: body.password })
+        res.setHeader('Set-Cookie', `sure_session=${session.token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=86400`)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ identity: session.identity }))
+      } catch (err) {
+        res.writeHead(401, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: err.message }))
+      }
+      return
+    }
+
+    // POST /api/auth/logout
+    if (req.method === 'POST' && pathname === '/api/auth/logout') {
+      const cookie = parseCookies(req.headers.cookie || '')
+      if (cookie.sure_session) await auth.logout(cookie.sure_session)
+      res.setHeader('Set-Cookie', 'sure_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0')
+      res.writeHead(200)
+      res.end('{}')
+      return
+    }
+
+    // GET /api/auth/session
+    if (req.method === 'GET' && pathname === '/api/auth/session') {
+      const cookie = parseCookies(req.headers.cookie || '')
+      if (cookie.sure_session) {
+        const session = await auth.getSession(cookie.sure_session)
+        if (session) {
+          res.writeHead(200, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ identity: session.identity }))
+          return
+        }
+      }
+      res.writeHead(401)
+      res.end(JSON.stringify({ error: 'Not authenticated' }))
       return
     }
 

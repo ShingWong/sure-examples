@@ -91,6 +91,26 @@
 </style>
 </head>
 <body>
+<div id="authPage" class="sure-auth__form" style="display:none">
+  <div class="sure-auth__header">
+    <h1>sure-chatbot</h1>
+    <p>Sign in to continue</p>
+  </div>
+  <div id="authAlert"></div>
+  <div class="sure-auth__field">
+    <label class="sure-auth__label">Email</label>
+    <input class="sure-auth__input" id="loginEmail" type="email" placeholder="demo@example.com" autocomplete="email">
+  </div>
+  <div class="sure-auth__field">
+    <label class="sure-auth__label">Password</label>
+    <input class="sure-auth__input" id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password">
+  </div>
+  <button class="sure-auth__btn" id="loginBtn" onclick="login()">Sign In</button>
+  <div class="sure-auth__footer">
+    Don't have an account? <a href="#" onclick="showRegister()">Register</a>
+  </div>
+</div>
+
 <div class="app" id="app">
   <!-- Sidebar -->
   <aside class="sidebar">
@@ -536,23 +556,117 @@ function escHtml(str) {
   return div.innerHTML
 }
 
-// ── Init ──
-loadConfig()
+// ── Auth ──
+let currentIdentity = null
 
-// Restore conversations from cookie, or start fresh
-if (conversations.length === 0) {
-  newConversation()
-} else {
-  renderConversations()
-  // Switch to most recent conversation
-  activeConversationId = conversations[0].id
-  renderConversations()
-  const conv = conversations[0]
-  document.getElementById('chatTitle').textContent = conv ? conv.title : 'Chat'
-  renderMessages(activeConversationId)
-  document.getElementById('messageInput').disabled = false
-  document.getElementById('sendBtn').disabled = false
-  setStatus('connected', 'Ready')
+async function checkSession() {
+  try {
+    const res = await fetch('/api/auth/session')
+    if (res.ok) {
+      const data = await res.json()
+      currentIdentity = data.identity
+      return true
+    }
+  } catch {}
+  return false
+}
+
+async function login() {
+  const email = document.getElementById('loginEmail').value
+  const password = document.getElementById('loginPassword').value
+  const btn = document.getElementById('loginBtn')
+  btn.disabled = true; btn.textContent = 'Signing in...'
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+    currentIdentity = data.identity
+    document.getElementById('authPage').style.display = 'none'
+    document.getElementById('app').style.display = 'flex'
+    initChat()
+  } catch (e) {
+    showToast('error', e.message)
+  } finally {
+    btn.disabled = false; btn.textContent = 'Sign In'
+  }
+}
+
+function showRegister() {
+  document.getElementById('authPage').innerHTML = `
+    <div class="sure-auth__header">
+      <h1>Create Account</h1>
+      <p>Enter your details to get started</p>
+    </div>
+    <div id="authAlert"></div>
+    <div class="sure-auth__field">
+      <label class="sure-auth__label">Email</label>
+      <input class="sure-auth__input" id="regEmail" type="email" placeholder="you@example.com">
+    </div>
+    <div class="sure-auth__field">
+      <label class="sure-auth__label">Password</label>
+      <input class="sure-auth__input" id="regPassword" type="password" placeholder="At least 4 characters">
+    </div>
+    <button class="sure-auth__btn" onclick="register()">Create Account</button>
+    <div class="sure-auth__footer">
+      Already have an account? <a href="#" onclick="showLogin()">Sign in</a>
+    </div>
+  `
+}
+
+function showLogin() {
+  location.reload()  // Simple reload to reset the auth page
+}
+
+async function register() {
+  const email = document.getElementById('regEmail').value
+  const password = document.getElementById('regPassword').value
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error)
+    currentIdentity = data.identity
+    document.getElementById('authPage').style.display = 'none'
+    document.getElementById('app').style.display = 'flex'
+    initChat()
+  } catch (e) {
+    showToast('error', e.message)
+  }
+}
+
+// ── Init ──
+;(async () => {
+  loadConfig()
+  const authed = await checkSession()
+  if (authed) {
+    document.getElementById('authPage').style.display = 'none'
+    document.getElementById('app').style.display = 'flex'
+    initChat()
+  } else {
+    document.getElementById('authPage').style.display = 'block'
+    document.getElementById('app').style.display = 'none'
+  }
+})()
+
+function initChat() {
+  if (conversations.length === 0) {
+    newConversation()
+  } else {
+    renderConversations()
+    activeConversationId = conversations[0].id
+    renderConversations()
+    const conv = conversations[0]
+    document.getElementById('chatTitle').textContent = conv ? conv.title : 'Chat'
+    renderMessages(activeConversationId)
+    document.getElementById('messageInput').disabled = false
+    document.getElementById('sendBtn').disabled = false
+    setStatus('connected', 'Ready')
+  }
 }
 </script>
 </body>
