@@ -837,6 +837,26 @@ function renderPanel() {
           <button class="btn btn-secondary" style="flex:1" onclick="savePanelState({mode:'detail',title:'Persona Detail',entityId:'${pe?.id || ''}'})">Cancel</button>
         </div>`
       break
+    case 'key-manager':
+      body.innerHTML = `
+        <h3 style="font-size:1rem;font-weight:700;margin-bottom:1rem">API Keys</h3>
+        <div id="keyList"></div>
+        <div style="margin-top:1rem;border-top:1px solid var(--border);padding-top:1rem">
+          <div class="field"><label>Provider</label>
+            <select class="sure-auth__input" id="newKeyProvider">
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="google">Google Gemini</option>
+              <option value="openrouter">OpenRouter</option>
+            </select>
+          </div>
+          <div class="field"><label>API Key</label>
+            <input class="sure-auth__input" type="password" id="newKeyValue" placeholder="sk-...">
+          </div>
+          <button class="sure-auth__btn" onclick="addApiKey()">Save Key</button>
+        </div>`
+      loadKeyList()
+      break
     default:
       body.innerHTML = `<p style="color:var(--muted)">${panelState.content || 'No content'}</p>`
   }
@@ -865,6 +885,47 @@ function renderSettingsPanel() {
       <button class="theme-btn" data-theme="dracula" onclick="setTheme('dracula',this)" style="flex:1">Dracula</button>
     </div>
   `
+}
+
+// ── Key Management ──
+async function loadKeyList() {
+  try {
+    const res = await fetch('/api/keys')
+    const data = await res.json()
+    const container = document.getElementById('keyList')
+    if (!container) return
+    if (!data.providers || data.providers.length === 0) {
+      container.innerHTML = '<p style="color:var(--muted);font-size:0.875rem">No API keys configured. Add one below.</p>'
+      return
+    }
+    container.innerHTML = data.providers.map(p => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--border)">
+        <div><strong>${p.provider}</strong><br><span style="font-size:0.75rem;color:var(--muted)">${p.masked}</span></div>
+        <button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteKey('${p.provider}')">Remove</button>
+      </div>
+    `).join('')
+  } catch (e) { console.error('Failed to load keys:', e) }
+}
+
+async function addApiKey() {
+  const provider = document.getElementById('newKeyProvider').value
+  const key = document.getElementById('newKeyValue').value.trim()
+  if (!key) { showToast('error', 'Key is required'); return }
+  try {
+    const res = await fetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, key }) })
+    if (!res.ok) throw new Error((await res.json()).error)
+    document.getElementById('newKeyValue').value = ''
+    showToast('success', `${provider} key saved`)
+    loadKeyList()
+  } catch (e) { showToast('error', e.message) }
+}
+
+async function deleteKey(provider) {
+  try {
+    await fetch(`/api/keys/${provider}`, { method: 'DELETE' })
+    showToast('info', `${provider} key removed`)
+    loadKeyList()
+  } catch (e) { showToast('error', e.message) }
 }
 
 // ── Init ──

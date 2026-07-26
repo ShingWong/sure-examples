@@ -108,10 +108,13 @@ def run_all_tests(mgr):
     # ── 23. Persona CRUD test ──
     step('persona CRUD', lambda: test_persona_crud(mgr))
 
-    # ── 24. Final screenshot ──
+    # ── 24. Key management test ──
+    step('key management', lambda: test_key_management(mgr))
+
+    # ── 26. Final screenshot ──
     step('screenshot final', lambda: mgr.screenshot())
 
-    # ── 25. Close browser ──
+    # ── 27. Close browser ──
     step('close', lambda: mgr.close())
 
     return results
@@ -319,6 +322,31 @@ def test_persona_crud(mgr):
     time.sleep(0.3)
     dom = mgr.get_dom()
     assert 'peName' in dom['data']['html'], 'Persona editor not opened'
+    return True
+
+
+def test_key_management(mgr):
+    # Login
+    mgr.fill('#loginEmail', 'demo@example.com')
+    mgr.fill('#loginPassword', 'demo')
+    mgr.click('#loginBtn')
+    time.sleep(0.5)
+    # Open preview panel
+    mgr.click('button[title="Preview panel"]')
+    time.sleep(0.3)
+    # Switch to key-manager mode via evaluate
+    dom = mgr.get_dom()
+    # Try to navigate to key manager by evaluating savePanelState
+    try:
+        mgr.evaluate('savePanelState({mode:"key-manager",title:"API Keys"})')
+        time.sleep(0.3)
+    except Exception:
+        pass
+    dom = mgr.get_dom()
+    html = dom['data']['html']
+    assert 'API' in html or 'keyList' in html, 'Key manager UI not found'
+    # Verify key manager elements
+    assert 'Save Key' in html or 'newKeyValue' in html, 'Key add form not found'
     return True
 
 

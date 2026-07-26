@@ -17,6 +17,7 @@ import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PUBLIC = path.join(__dirname, 'public')
@@ -85,6 +86,37 @@ let currentConfig = {
   theme: 'nord',
   baseUrl: '',
   label: '',
+}
+
+// ── API Key Encryption ──
+
+const ENCRYPTION_KEY = Buffer.from(process.env.API_KEY_SECRET || 'default-dev-key-change-in-production-!!', 'utf-8').slice(0, 32)
+const ALGORITHM = 'aes-256-gcm'
+
+function encryptKey(plaintext) {
+  const iv = randomBytes(16)
+  const cipher = createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv)
+  let encrypted = cipher.update(plaintext, 'utf-8', 'hex')
+  encrypted += cipher.final('hex')
+  const authTag = cipher.getAuthTag().toString('hex')
+  return JSON.stringify({ iv: iv.toString('hex'), encrypted, authTag })
+}
+
+function decryptKey(encoded) {
+  const { iv, encrypted, authTag } = JSON.parse(encoded)
+  const decipher = createDecipheriv(ALGORITHM, ENCRYPTION_KEY, Buffer.from(iv, 'hex'))
+  decipher.setAuthTag(Buffer.from(authTag, 'hex'))
+  let decrypted = decipher.update(encrypted, 'hex', 'utf-8')
+  decrypted += decipher.final('utf-8')
+  return decrypted
+}
+
+// ── Key store (in-memory, encrypted at rest) ──
+const keyStore = {}  // provider → encrypted blob
+
+function maskKey(key) {
+  if (key.length <= 8) return '****'
+  return key.slice(0, 3) + '...' + key.slice(-4)
 }
 
 // ── Auth (built-in SimpleAuth via sure-state) ──
@@ -202,7 +234,7 @@ const server = http.createServer(async (req, res) => {
 
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 
   if (req.method === 'OPTIONS') {
@@ -244,6 +276,42 @@ const server = http.createServer(async (req, res) => {
       Object.assign(panelState, body)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(panelState))
+      return
+    }
+
+    // ── Key management routes ──
+
+    // GET /api/keys — list configured providers with masked keys
+    if (req.method === 'GET' && pathname === '/api/keys') {
+      const providers = Object.entries(keyStore).map(([provider, encrypted]) => ({
+        provider,
+        status: 'configured',
+        masked: maskKey(decryptKey(encrypted)),
+      }))
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ providers }))
+      return
+    }
+
+    // POST /api/keys — add or rotate a key
+    if (req.method === 'POST' && pathname === '/api/keys') {
+      const body = await parseBody(req)
+      const { provider, key } = body
+      if (!provider || !key) { res.writeHead(400); res.end(JSON.stringify({ error: 'provider and key required' })); return }
+      keyStore[provider] = encryptKey(key)
+      // Redact from logs
+      console.log(`[key] ${provider} key ${maskKey(key)} configured`)
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ provider, status: 'configured', masked: maskKey(key) }))
+      return
+    }
+
+    // DELETE /api/keys/:provider — delete a key
+    if (req.method === 'DELETE' && pathname.startsWith('/api/keys/')) {
+      const provider = pathname.slice('/api/keys/'.length)
+      delete keyStore[provider]
+      res.writeHead(200)
+      res.end(JSON.stringify({ ok: true }))
       return
     }
 
