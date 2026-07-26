@@ -133,7 +133,7 @@ if (currentConfig.provider === 'mock') {
 }
 
 // ── sure-gentic integration ──
-import { Agent, BaseSkill } from 'sure-gentic'
+import { Agent, BaseSkill, ToolRegistryService } from 'sure-gentic'
 import { LLMProviderFactory, OpenAIProvider, AnthropicProvider, GoogleProvider, OpenAICompatibleProvider, MockProvider } from 'sure-gentic'
 
 let agent = null
@@ -276,6 +276,18 @@ const server = http.createServer(async (req, res) => {
       Object.assign(panelState, body)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(panelState))
+      return
+    }
+
+    // GET /api/tools — list registered tools from ToolRegistryService
+    if (req.method === 'GET' && pathname === '/api/tools') {
+      const registry = ToolRegistryService.getInstance()
+      const tools = registry.listTools().map(t => ({
+        name: t.name, description: t.description,
+        parameters: t.parameters?.map(p => ({ name: p.name, type: p.type, required: p.required })) || [],
+      }))
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ tools }))
       return
     }
 
