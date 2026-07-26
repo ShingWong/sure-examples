@@ -194,11 +194,10 @@
       </div>
       <div style="display:flex;align-items:center;gap:0.25rem">
         <button class="btn-icon" onclick="openSettingsModal('settings')" title="Settings">⚙</button>
-        <button class="btn-icon" onclick="openSettingsModal('tools')" title="Tools">🔧</button>
         <button class="btn-icon" onclick="openSettingsModal('keys')" title="API Keys">🔑</button>
         <button class="btn-icon" onclick="openSettingsModal('inspect')" title="Inspect">📋</button>
-        <button class="btn-icon" onclick="toggleRightPanel()" title="Preview panel" style="border-left:1px solid var(--border);padding-left:0.5rem">▶</button>
         <button class="btn-icon" onclick="clearMessages()" title="Clear messages">🗑</button>
+        <button class="btn-icon" onclick="toggleRightPanel()" title="Preview panel" style="border-left:1px solid var(--border);padding-left:0.5rem;margin-left:0.25rem">▶</button>
       </div>
     </div>
     <div class="messages" id="messages"></div>
@@ -889,12 +888,22 @@ function renderToolsModal() {
 function renderKeysModal() {
   return '<div id="keyList" style="margin-bottom:1rem;font-size:0.875rem"></div>' +
     '<div style="border-top:1px solid var(--border);padding-top:1rem">' +
-    '<div class="field"><label>Provider</label><select class="sure-auth__input" id="newKeyProvider">' +
+    '<div class="field"><label>Provider</label><select class="sure-auth__input" id="newKeyProvider" onchange="toggleKeyBaseUrl()">' +
     '<option value="openai">OpenAI</option><option value="anthropic">Anthropic</option>' +
     '<option value="google">Google Gemini</option><option value="openrouter">OpenRouter</option>' +
     '<option value="openai-compatible">OpenAI-compatible (llama.cpp, vLLM, ...)</option></select></div>' +
+    '<div class="field" id="keyBaseUrlField" style="display:none"><label>Base URL</label>' +
+    '<input class="sure-auth__input" type="text" id="newKeyBaseUrl" placeholder="https://openrouter.ai/api/v1">' +
+    '<div class="hint">Required for OpenAI-compatible providers</div></div>' +
     '<div class="field"><label>API Key</label><input class="sure-auth__input" type="password" id="newKeyValue" placeholder="sk-..."></div>' +
     '<button class="sure-auth__btn" onclick="addApiKey()">Save Key</button></div>'
+}
+
+function toggleKeyBaseUrl() {
+  const val = document.getElementById('newKeyProvider').value
+  document.getElementById('keyBaseUrlField').style.display = (val === 'openai-compatible') ? 'block' : 'none'
+  // Pre-fill OpenRouter URL
+  if (val === 'openrouter') document.getElementById('newKeyBaseUrl').value = 'https://openrouter.ai/api/v1'
 }
 
 function renderInspectModal() {
@@ -1004,9 +1013,10 @@ async function loadKeyList() {
 async function addApiKey() {
   const provider = document.getElementById('newKeyProvider').value
   const key = document.getElementById('newKeyValue').value.trim()
+  const baseUrl = document.getElementById('newKeyBaseUrl')?.value.trim() || ''
   if (!key) { showToast('error', 'Key is required'); return }
   try {
-    const res = await fetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, key }) })
+    const res = await fetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, key, baseUrl }) })
     if (!res.ok) throw new Error((await res.json()).error)
     document.getElementById('newKeyValue').value = ''
     showToast('success', `${provider} key saved`)

@@ -295,10 +295,11 @@ const server = http.createServer(async (req, res) => {
 
     // GET /api/keys — list configured providers with masked keys
     if (req.method === 'GET' && pathname === '/api/keys') {
-      const providers = Object.entries(keyStore).map(([provider, encrypted]) => ({
+      const providers = Object.entries(keyStore).map(([provider, data]) => ({
         provider,
         status: 'configured',
-        masked: maskKey(decryptKey(encrypted)),
+        masked: maskKey(decryptKey(data.key)),
+        baseUrl: data.baseUrl || '',
       }))
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ providers }))
@@ -308,13 +309,12 @@ const server = http.createServer(async (req, res) => {
     // POST /api/keys — add or rotate a key
     if (req.method === 'POST' && pathname === '/api/keys') {
       const body = await parseBody(req)
-      const { provider, key } = body
+      const { provider, key, baseUrl } = body
       if (!provider || !key) { res.writeHead(400); res.end(JSON.stringify({ error: 'provider and key required' })); return }
-      keyStore[provider] = encryptKey(key)
-      // Redact from logs
-      console.log(`[key] ${provider} key ${maskKey(key)} configured`)
+      keyStore[provider] = { key: encryptKey(key), baseUrl: baseUrl || '' }
+      console.log(`[key] ${provider} key ${maskKey(key)} configured${baseUrl ? ' url=' + baseUrl : ''}`)
       res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ provider, status: 'configured', masked: maskKey(key) }))
+      res.end(JSON.stringify({ provider, status: 'configured', masked: maskKey(key), baseUrl: baseUrl || '' }))
       return
     }
 
