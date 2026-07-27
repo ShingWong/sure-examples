@@ -132,7 +132,10 @@
   .modal__header h2 { font-size:1rem; font-weight:700; }
   .modal__close { background:none; border:none; cursor:pointer; color:var(--muted); font-size:1.25rem; flex-shrink:0; }
   .modal__body { padding:1.25rem; overflow-y:auto; flex:1; }
-  .modal__resize-handle { position:absolute; bottom:0; right:0; width:16px; height:16px; cursor:nwse-resize; background:linear-gradient(135deg,transparent 50%,var(--muted) 50%); border-radius:0 0 12px 0; }
+  .modal__resize-handle { position:absolute; background:transparent; z-index:5; }
+  .modal__resize-handle--e { top:0; right:0; bottom:16px; width:6px; cursor:ew-resize; }
+  .modal__resize-handle--s { bottom:0; left:0; right:16px; height:6px; cursor:ns-resize; }
+  .modal__resize-handle--se { bottom:0; right:0; width:16px; height:16px; cursor:nwse-resize; background:linear-gradient(135deg,transparent 50%,var(--muted) 50%); border-radius:0 0 12px 0; }
 
   /* ── Preview panel (in-layout, collapsible like sidebar) ── */
   .right-panel .preview-panel { display:flex; flex-direction:column; height:100%; }
@@ -244,7 +247,9 @@
       <button class="modal__close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal__body" id="modalBody"></div>
-    <div class="modal__resize-handle" id="modalResizer" onmousedown="startModalResize(event)"></div>
+    <div class="modal__resize-handle modal__resize-handle--e" onmousedown="startModalResize(event,'e')"></div>
+    <div class="modal__resize-handle modal__resize-handle--s" onmousedown="startModalResize(event,'s')"></div>
+    <div class="modal__resize-handle modal__resize-handle--se" onmousedown="startModalResize(event,'se')"></div>
   </div>
 </div>
 
@@ -437,7 +442,6 @@ async function setTheme(name, btn) {
     }
     styleEl.textContent = css
     // Map theme CSS variables to common aliases
-    const root = getComputedStyle(document.documentElement)
     const themeVars = {
       '--bg': { nord:'#eceff4', forest:'#f4f1ea', dracula:'#282a36', dark:'#1a1a2e' },
       '--text': { nord:'#2e3440', forest:'#2d2a24', dracula:'#f8f8f2', dark:'#e8e8e8' },
@@ -451,18 +455,12 @@ async function setTheme(name, btn) {
       '--warn': { nord:'#ebcb8b', forest:'#c4903a', dracula:'#f1fa8c', dark:'#ffd43b' },
     }
     for (const [varName, vals] of Object.entries(themeVars)) {
-      const computed = root.getPropertyValue(varName).trim()
-      document.documentElement.style.setProperty(varName, computed || vals[name] || '')
+      document.documentElement.style.setProperty(varName, vals[name] || '')
     }
   } catch (e) {
     console.error('Theme load failed:', e)
   }
   await saveConfig()
-}
-
-// Extract CSS variable from a stylesheet
-function getCSSVar(name, fallback) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback
 }
 
 // ── Config ──
@@ -929,39 +927,45 @@ function closeModal() {
   const header = modal?.querySelector('.modal__header')
   if (!modal || !header) return
   header.addEventListener('mousedown', (e) => {
-    if (e.target.closest('.modal__close')) return
-    modal.style.position = 'relative'
+    if (e.target.closest('.modal__close') || e.target.closest('.modal__resize-handle')) return
     const rect = modal.getBoundingClientRect()
-    const ox = e.clientX - rect.left, oy = e.clientY - rect.top
+    // Switch to fixed positioning immediately to prevent jump
+    modal.style.position = 'fixed'
     modal.style.margin = '0'
+    modal.style.left = rect.left + 'px'
+    modal.style.top = rect.top + 'px'
+    const ox = e.clientX - rect.left, oy = e.clientY - rect.top
     const onMove = (ev) => {
-      modal.style.left = (ev.clientX - ox - modal.parentElement.getBoundingClientRect().left) + 'px'
-      modal.style.top = (ev.clientY - oy - modal.parentElement.getBoundingClientRect().top) + 'px'
+      modal.style.left = (ev.clientX - ox) + 'px'
+      modal.style.top = (ev.clientY - oy) + 'px'
     }
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', () => document.removeEventListener('mousemove', onMove), { once: true })
   })
 })()
 
-// Make modal resizable via corner handle
-function startModalResize(e) {
+// Make modal resizable — supports 3 handles: e (right edge), s (bottom edge), se (corner)
+function startModalResize(e, dir) {
   e.preventDefault()
   const modal = document.querySelector('.modal')
   const startX = e.clientX, startY = e.clientY
   const startW = modal.offsetWidth, startH = modal.offsetHeight
   const minW = 320, minH = 200
+  const cursors = { e: 'ew-resize', s: 'ns-resize', se: 'nwse-resize' }
 
   function onMove(ev) {
-    const w = Math.max(minW, startW + (ev.clientX - startX))
-    const h = Math.max(minH, startH + (ev.clientY - startY))
-    modal.style.width = w + 'px'
-    modal.style.height = h + 'px'
+    if (dir === 'e' || dir === 'se') {
+      modal.style.width = Math.max(minW, startW + (ev.clientX - startX)) + 'px'
+    }
+    if (dir === 's' || dir === 'se') {
+      modal.style.height = Math.max(minH, startH + (ev.clientY - startY)) + 'px'
+    }
     modal.style.maxWidth = 'none'
     modal.style.maxHeight = 'none'
   }
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', () => document.removeEventListener('mousemove', onMove), { once: true })
-  document.body.style.cursor = 'nwse-resize'
+  document.body.style.cursor = cursors[dir] || 'nwse-resize'
   document.addEventListener('mouseup', () => document.body.style.cursor = '', { once: true })
 }
 
