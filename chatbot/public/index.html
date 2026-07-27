@@ -984,11 +984,13 @@ function closeModal() {
 // Make modal resizable — configurable edges: e, s, se, w, n, nw, ne, sw
 function startModalResize(e, dir, modal) {
   e.preventDefault()
+  e.stopPropagation()
   const startX = e.clientX, startY = e.clientY
   const startW = modal.offsetWidth, startH = modal.offsetHeight
   const startL = modal.offsetLeft, startT = modal.offsetTop
   const minW = 320, minH = 200
   const cursors = { e:'ew-resize', s:'ns-resize', se:'nwse-resize', w:'ew-resize', n:'ns-resize', nw:'nwse-resize', ne:'nesw-resize', sw:'nesw-resize' }
+  document.body.style.cursor = cursors[dir] || 'nwse-resize'
 
   function onMove(ev) {
     const dx = ev.clientX - startX, dy = ev.clientY - startY
@@ -998,10 +1000,12 @@ function startModalResize(e, dir, modal) {
     if (dir.includes('n')) { modal.style.height = Math.max(minH, startH - dy) + 'px'; modal.style.top = (startT + dy) + 'px' }
     modal.style.maxWidth = 'none'; modal.style.maxHeight = 'none'
   }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove)
+    document.body.style.cursor = ''
+  }
   document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', () => document.removeEventListener('mousemove', onMove), { once: true })
-  document.body.style.cursor = cursors[dir] || 'nwse-resize'
-  document.addEventListener('mouseup', () => document.body.style.cursor = '', { once: true })
+  document.addEventListener('mouseup', onUp, { once: true })
 }
 
 function openSettingsModal(mode) {
