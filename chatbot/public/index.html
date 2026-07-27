@@ -7,6 +7,11 @@
 <style>
   /* ── Base reset ── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f8f9fa; --text: #2e3440; --accent: #5e81ac; --muted: #7a7568;
+    --border: #d8dee9; --surface: #ffffff; --highlight: #e5e9f0;
+    --error: #bf616a; --success: #a3be8c; --warn: #ebcb8b;
+  }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; transition: background 0.3s, color 0.3s; }
   a { color: var(--accent); }
   #authPage { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 1rem; }
@@ -97,6 +102,7 @@
   .theme-swatch.nord { background: linear-gradient(90deg, #eceff4, #5e81ac); }
   .theme-swatch.forest { background: linear-gradient(90deg, #f4f1ea, #3d6b3c); }
   .theme-swatch.dracula { background: linear-gradient(90deg, #282a36, #bd93f9); }
+  .theme-swatch.dark { background: linear-gradient(90deg, #1a1a2e, #64ffda); }
 
   /* ── Status indicator ── */
   .status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.75rem; color: var(--muted); padding: 0.5rem 1.5rem; border-top: 1px solid var(--border); }
@@ -422,8 +428,24 @@ async function setTheme(name, btn) {
       document.head.appendChild(styleEl)
     }
     styleEl.textContent = css
+    // Map theme CSS variables to common aliases
     const root = getComputedStyle(document.documentElement)
-    document.documentElement.style.setProperty('--bg', root.getPropertyValue('--bg') || (name === 'dracula' ? '#282a36' : name === 'forest' ? '#f4f1ea' : '#f8f9fa'))
+    const themeVars = {
+      '--bg': { nord:'#eceff4', forest:'#f4f1ea', dracula:'#282a36', dark:'#1a1a2e' },
+      '--text': { nord:'#2e3440', forest:'#2d2a24', dracula:'#f8f8f2', dark:'#e8e8e8' },
+      '--accent': { nord:'#5e81ac', forest:'#3d6b3c', dracula:'#bd93f9', dark:'#64ffda' },
+      '--muted': { nord:'#4c566a', forest:'#7a7568', dracula:'#6272a4', dark:'#8892b0' },
+      '--border': { nord:'#d8dee9', forest:'#c9c3b3', dracula:'#6272a4', dark:'#2d3a5c' },
+      '--surface': { nord:'#ffffff', forest:'#ffffff', dracula:'#44475a', dark:'#16213e' },
+      '--highlight': { nord:'#e5e9f0', forest:'#e8e3d8', dracula:'#44475a', dark:'#1e2d50' },
+      '--error': { nord:'#bf616a', forest:'#b34141', dracula:'#ff5555', dark:'#ff6b6b' },
+      '--success': { nord:'#a3be8c', forest:'#5b8c5a', dracula:'#50fa7b', dark:'#51cf66' },
+      '--warn': { nord:'#ebcb8b', forest:'#c4903a', dracula:'#f1fa8c', dark:'#ffd43b' },
+    }
+    for (const [varName, vals] of Object.entries(themeVars)) {
+      const computed = root.getPropertyValue(varName).trim()
+      document.documentElement.style.setProperty(varName, computed || vals[name] || '')
+    }
   } catch (e) {
     console.error('Theme load failed:', e)
   }
@@ -878,7 +900,8 @@ function renderSettingsModal() {
     '<div class="field"><label>Theme</label><div style="display:flex;gap:0.5rem">' +
     '<button class="theme-btn active" data-theme="nord" onclick="setTheme(\'nord\',this)" style="flex:1">Nord</button>' +
     '<button class="theme-btn" data-theme="forest" onclick="setTheme(\'forest\',this)" style="flex:1">Forest</button>' +
-    '<button class="theme-btn" data-theme="dracula" onclick="setTheme(\'dracula\',this)" style="flex:1">Dracula</button></div></div>'
+    '<button class="theme-btn" data-theme="dracula" onclick="setTheme(\'dracula\',this)" style="flex:1">Dracula</button>' +
+    '<button class="theme-btn" data-theme="dark" onclick="setTheme(\'dark\',this)" style="flex:1">Dark</button></div></div>'
 }
 
 function renderToolsModal() {

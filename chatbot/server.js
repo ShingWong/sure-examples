@@ -488,8 +488,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && pathname === '/api/theme') {
       const themeName = url.searchParams.get('name') || 'nord'
       try {
-        const { nord, forest, dracula } = await import('sure-ui')
-        const themes = { nord, forest, dracula }
+        const { nord, forest, dracula, dark } = await import('sure-ui')
+        const themes = { nord, forest, dracula, dark }
         const css = themes[themeName]
         if (!css) { res.writeHead(404); res.end('Theme not found'); return }
         res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8' })
