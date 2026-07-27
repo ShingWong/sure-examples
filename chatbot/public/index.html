@@ -758,8 +758,8 @@ let currentIdentity = null
 async function checkSession() {
   try {
     const res = await fetch('/api/auth/session')
-    if (res.ok) {
-      const data = await res.json()
+    const data = await res.json()
+    if (data.identity) {
       currentIdentity = data.identity
       return true
     }

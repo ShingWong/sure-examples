@@ -379,8 +379,8 @@ const server = http.createServer(async (req, res) => {
           return
         }
       }
-      res.writeHead(401)
-      res.end(JSON.stringify({ error: 'Not authenticated' }))
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ authenticated: false }))
       return
     }
 
