@@ -133,9 +133,14 @@
   .modal__close { background:none; border:none; cursor:pointer; color:var(--muted); font-size:1.25rem; flex-shrink:0; }
   .modal__body { padding:1.25rem; overflow-y:auto; flex:1; }
   .modal__resize-handle { position:absolute; background:transparent; z-index:5; }
-  .modal__resize-handle--e { top:0; right:0; bottom:16px; width:6px; cursor:ew-resize; }
-  .modal__resize-handle--s { bottom:0; left:0; right:16px; height:6px; cursor:ns-resize; }
-  .modal__resize-handle--se { bottom:0; right:0; width:16px; height:16px; cursor:nwse-resize; background:linear-gradient(135deg,transparent 50%,var(--muted) 50%); border-radius:0 0 12px 0; }
+  .modal__resize-handle--e  { top:0; right:0; bottom:16px; width:6px; }
+  .modal__resize-handle--s  { bottom:0; left:0; right:16px; height:6px; }
+  .modal__resize-handle--se { bottom:0; right:0; width:16px; height:16px; background:linear-gradient(135deg,transparent 50%,var(--muted) 50%); border-radius:0 0 12px 0; }
+  .modal__resize-handle--w  { top:0; left:0; bottom:16px; width:6px; }
+  .modal__resize-handle--n  { top:0; left:0; right:16px; height:6px; }
+  .modal__resize-handle--nw { top:0; left:0; width:16px; height:16px; }
+  .modal__resize-handle--ne { top:0; right:0; width:16px; height:16px; }
+  .modal__resize-handle--sw { bottom:0; left:0; width:16px; height:16px; }
 
   /* ── Preview panel (in-layout, collapsible like sidebar) ── */
   .right-panel .preview-panel { display:flex; flex-direction:column; height:100%; }
@@ -247,9 +252,6 @@
       <button class="modal__close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal__body" id="modalBody"></div>
-    <div class="modal__resize-handle modal__resize-handle--e" onmousedown="startModalResize(event,'e')"></div>
-    <div class="modal__resize-handle modal__resize-handle--s" onmousedown="startModalResize(event,'s')"></div>
-    <div class="modal__resize-handle modal__resize-handle--se" onmousedown="startModalResize(event,'se')"></div>
   </div>
 </div>
 
@@ -604,24 +606,24 @@ function selectPersona(id) {
 function filterPersonas(query) { renderPersonas(query) }
 
 function openPersonaEditor(persona) {
-  const body = document.getElementById('modalBody')
-  const title = document.getElementById('modalTitle')
-  title.textContent = persona ? 'Edit Persona' : 'New Persona'
   const pe = persona
-  body.innerHTML = `
-    <div class="field"><label>Name</label><input class="sure-auth__input" id="peName" value="${pe ? escHtml(pe.name) : ''}"></div>
-    <div class="field"><label>Description</label><input class="sure-auth__input" id="peDesc" value="${pe ? escHtml(pe.description) : ''}"></div>
-    <div class="field"><label>Avatar Color</label><input type="color" id="peColor" value="${pe ? pe.color : '#5e81ac'}" style="width:100%;height:40px;border-radius:6px;cursor:pointer"></div>
-    <div class="field"><label>System Prompt</label><textarea class="sure-auth__input" id="pePrompt" rows="4">${pe ? escHtml(pe.prompt) : ''}</textarea></div>
-    <div style="display:flex;gap:0.5rem">
-      <div class="field" style="flex:1"><label>Model</label><input class="sure-auth__input" id="peModel" value="${pe ? escHtml(pe.model) : 'gpt-4o'}"></div>
-      <div class="field" style="flex:1"><label>Temperature</label><input class="sure-auth__input" id="peTemp" type="number" step="0.1" min="0" max="2" value="${pe ? pe.temperature : 0.7}"></div>
-    </div>
-    <div style="display:flex;gap:0.5rem;margin-top:1rem">
-      <button class="btn btn-primary" style="flex:1" onclick="savePersona()">Save</button>
-      <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancel</button>
-    </div>`
-  document.getElementById('modalOverlay').classList.add('open')
+  openModal({
+    title: pe ? 'Edit Persona' : 'New Persona',
+    content: `
+      <div class="field"><label>Name</label><input class="sure-auth__input" id="peName" value="${pe ? escHtml(pe.name) : ''}"></div>
+      <div class="field"><label>Description</label><input class="sure-auth__input" id="peDesc" value="${pe ? escHtml(pe.description) : ''}"></div>
+      <div class="field"><label>Avatar Color</label><input type="color" id="peColor" value="${pe ? pe.color : '#5e81ac'}" style="width:100%;height:40px;border-radius:6px;cursor:pointer"></div>
+      <div class="field"><label>System Prompt</label><textarea class="sure-auth__input" id="pePrompt" rows="4">${pe ? escHtml(pe.prompt) : ''}</textarea></div>
+      <div style="display:flex;gap:0.5rem">
+        <div class="field" style="flex:1"><label>Model</label><input class="sure-auth__input" id="peModel" value="${pe ? escHtml(pe.model) : 'gpt-4o'}"></div>
+        <div class="field" style="flex:1"><label>Temperature</label><input class="sure-auth__input" id="peTemp" type="number" step="0.1" min="0" max="2" value="${pe ? pe.temperature : 0.7}"></div>
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:1rem">
+        <button class="btn btn-primary" style="flex:1" onclick="savePersona()">Save</button>
+        <button class="btn btn-secondary" style="flex:1" onclick="closeModal()">Cancel</button>
+      </div>`,
+    resizeEdges: ['e','s','se','w','n'],
+  })
 }
 
 function savePersona() {
@@ -917,51 +919,84 @@ function toggleSidebar() {
   else sidebar.style.width = '260px'
 }
 
+// ── Generic modal component ──
+function openModal(opts) {
+  const { title, content, width = 480, resizeEdges = ['e','s','se'], draggable = true } = opts
+  const overlay = document.getElementById('modalOverlay')
+  const modal = overlay.querySelector('.modal')
+  const titleEl = document.getElementById('modalTitle')
+  const bodyEl = document.getElementById('modalBody')
+
+  // Set content
+  titleEl.textContent = title
+  bodyEl.innerHTML = content
+
+  // Remove old resize handles
+  modal.querySelectorAll('.modal__resize-handle').forEach(el => el.remove())
+
+  // Add resize handles
+  const edgeLabels = { e: 'ew-resize', s: 'ns-resize', se: 'nwse-resize', w: 'ew-resize', n: 'ns-resize', nw: 'nwse-resize', ne: 'nesw-resize', sw: 'nesw-resize' }
+  const edgeClass = { e: '--e', s: '--s', se: '--se', w: '--w', n: '--n', nw: '--nw', ne: '--ne', sw: '--sw' }
+  for (const edge of resizeEdges) {
+    const h = document.createElement('div')
+    h.className = 'modal__resize-handle modal__resize-handle' + (edgeClass[edge] || '--se')
+    h.style.cursor = edgeLabels[edge] || 'nwse-resize'
+    h.addEventListener('mousedown', (e) => startModalResize(e, edge, modal))
+    modal.appendChild(h)
+  }
+
+  // Reset position/size
+  modal.style.position = ''
+  modal.style.margin = ''
+  modal.style.left = ''
+  modal.style.top = ''
+  modal.style.width = width + 'px'
+  modal.style.maxWidth = 'none'
+  modal.style.height = ''
+  modal.style.maxHeight = ''
+
+  // Attach drag
+  const header = modal.querySelector('.modal__header')
+  if (header && draggable) {
+    header.style.cursor = 'grab'
+    header._dragHandler = (e) => {
+      if (e.target.closest('.modal__close') || e.target.closest('.modal__resize-handle')) return
+      const rect = modal.getBoundingClientRect()
+      modal.style.position = 'fixed'
+      modal.style.margin = '0'
+      modal.style.left = rect.left + 'px'
+      modal.style.top = rect.top + 'px'
+      const ox = e.clientX - rect.left, oy = e.clientY - rect.top
+      const onMove = (ev) => { modal.style.left = (ev.clientX - ox) + 'px'; modal.style.top = (ev.clientY - oy) + 'px' }
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', () => document.removeEventListener('mousemove', onMove), { once: true })
+    }
+    header.addEventListener('mousedown', header._dragHandler)
+  }
+
+  overlay.classList.add('open')
+}
+
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('open')
 }
 
-// Make modal draggable via header
-;(() => {
-  const modal = document.querySelector('.modal')
-  const header = modal?.querySelector('.modal__header')
-  if (!modal || !header) return
-  header.addEventListener('mousedown', (e) => {
-    if (e.target.closest('.modal__close') || e.target.closest('.modal__resize-handle')) return
-    const rect = modal.getBoundingClientRect()
-    // Switch to fixed positioning immediately to prevent jump
-    modal.style.position = 'fixed'
-    modal.style.margin = '0'
-    modal.style.left = rect.left + 'px'
-    modal.style.top = rect.top + 'px'
-    const ox = e.clientX - rect.left, oy = e.clientY - rect.top
-    const onMove = (ev) => {
-      modal.style.left = (ev.clientX - ox) + 'px'
-      modal.style.top = (ev.clientY - oy) + 'px'
-    }
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', () => document.removeEventListener('mousemove', onMove), { once: true })
-  })
-})()
-
-// Make modal resizable — supports 3 handles: e (right edge), s (bottom edge), se (corner)
-function startModalResize(e, dir) {
+// Make modal resizable — configurable edges: e, s, se, w, n, nw, ne, sw
+function startModalResize(e, dir, modal) {
   e.preventDefault()
-  const modal = document.querySelector('.modal')
   const startX = e.clientX, startY = e.clientY
   const startW = modal.offsetWidth, startH = modal.offsetHeight
+  const startL = modal.offsetLeft, startT = modal.offsetTop
   const minW = 320, minH = 200
-  const cursors = { e: 'ew-resize', s: 'ns-resize', se: 'nwse-resize' }
+  const cursors = { e:'ew-resize', s:'ns-resize', se:'nwse-resize', w:'ew-resize', n:'ns-resize', nw:'nwse-resize', ne:'nesw-resize', sw:'nesw-resize' }
 
   function onMove(ev) {
-    if (dir === 'e' || dir === 'se') {
-      modal.style.width = Math.max(minW, startW + (ev.clientX - startX)) + 'px'
-    }
-    if (dir === 's' || dir === 'se') {
-      modal.style.height = Math.max(minH, startH + (ev.clientY - startY)) + 'px'
-    }
-    modal.style.maxWidth = 'none'
-    modal.style.maxHeight = 'none'
+    const dx = ev.clientX - startX, dy = ev.clientY - startY
+    if (dir.includes('e')) modal.style.width = Math.max(minW, startW + dx) + 'px'
+    if (dir.includes('s')) modal.style.height = Math.max(minH, startH + dy) + 'px'
+    if (dir.includes('w')) { modal.style.width = Math.max(minW, startW - dx) + 'px'; modal.style.left = (startL + dx) + 'px' }
+    if (dir.includes('n')) { modal.style.height = Math.max(minH, startH - dy) + 'px'; modal.style.top = (startT + dy) + 'px' }
+    modal.style.maxWidth = 'none'; modal.style.maxHeight = 'none'
   }
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', () => document.removeEventListener('mousemove', onMove), { once: true })
@@ -970,21 +1005,20 @@ function startModalResize(e, dir) {
 }
 
 function openSettingsModal(mode) {
-  const body = document.getElementById('modalBody')
-  const title = document.getElementById('modalTitle')
   const titles = { settings:'Settings', tools:'Tools', keys:'API Keys', inspect:'State Inspector' }
-  title.textContent = titles[mode] || 'Settings'
+  const contentMap = { settings: renderSettingsModal, tools: renderToolsModal, keys: renderKeysModal, inspect: renderInspectModal }
+  const widths = { keys: 400 }
+  const resizeEdges = { settings: ['e','s','se'], tools: ['e','s','se'], keys: ['e','s','se'], inspect: ['e','s','se','w','n'] }
 
-  if (mode === 'settings') body.innerHTML = renderSettingsModal()
-  else if (mode === 'tools') body.innerHTML = renderToolsModal()
-  else if (mode === 'keys') body.innerHTML = renderKeysModal()
-  else if (mode === 'inspect') body.innerHTML = renderInspectModal()
+  openModal({
+    title: titles[mode] || 'Settings',
+    content: contentMap[mode] ? contentMap[mode]() : '',
+    width: widths[mode] || 480,
+    resizeEdges: resizeEdges[mode] || ['e','s','se'],
+  })
 
-  document.getElementById('modalOverlay').classList.add('open')
-  if (mode === 'keys') loadKeyList()
+  if (mode === 'keys') { loadKeyList(); document.querySelector('.modal').style.width = '400px' }
   if (mode === 'tools') loadToolList()
-  if (mode === 'keys') document.querySelector('.modal')?.style.setProperty('width', '400px')
-  else document.querySelector('.modal')?.style.setProperty('width', '')
 }
 
 function renderSettingsModal() {
