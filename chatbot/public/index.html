@@ -28,6 +28,9 @@
   .sidebar.collapsed .persona-card { justify-content: center; padding:0.5rem; }
   .sidebar.collapsed .sidebar-header { justify-content: center; padding:0.5rem; }
   .sidebar.collapsed .sidebar-header .btn-icon:first-child { display: none; }
+  .sidebar.collapsed + .resize-handle { display: none; }
+  .resize-handle { width: 4px; cursor: col-resize; flex-shrink: 0; background: transparent; transition: background 0.15s; position:relative; z-index:10; }
+  .resize-handle:hover, .resize-handle:active { background: var(--accent); }
   .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
   .right-panel { width: 380px; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); flex-shrink: 0; transition: width 0.3s; overflow:hidden; }
   .right-panel.collapsed { width: 0; border-left: none; }
@@ -190,6 +193,7 @@
       <button class="btn btn-secondary" style="width:100%" onclick="toggleRightPanel()">⚙ Settings</button>
     </div>
   </aside>
+  <div class="resize-handle" id="leftResizer" onmousedown="startResize(event, 'left')"></div>
 
   <!-- Main chat area -->
   <div class="main">
@@ -218,11 +222,12 @@
       <span id="statusText">Ready</span>
     </div>
   </div>
+  <div class="resize-handle" id="rightResizer" onmousedown="startResize(event, 'right')"></div>
   <div class="right-panel" id="rightPanel">
     <div class="preview-panel">
       <div class="preview-panel__header">
+        <button class="preview-panel__close" onclick="toggleRightPanel()" title="Hide panel">Hide ▶</button>
         <span class="preview-panel__title" id="panelTitle">Content Preview</span>
-        <button class="preview-panel__close" onclick="toggleRightPanel()">◀ Hide</button>
       </div>
       <div class="preview-panel__body" id="panelBody"></div>
     </div>
@@ -856,9 +861,49 @@ async function savePanelState(update) {
 }
 
 function toggleRightPanel() {
-  document.getElementById('rightPanel').classList.toggle('collapsed')
-  const btn = document.querySelector('[title="Preview panel"]')
-  if (btn) btn.textContent = document.getElementById('rightPanel').classList.contains('collapsed') ? '▶' : '◀'
+  const panel = document.getElementById('rightPanel')
+  panel.classList.toggle('collapsed')
+  const isCollapsed = panel.classList.contains('collapsed')
+  // Reset width when toggling
+  if (isCollapsed) panel.style.width = ''
+  else panel.style.width = '380px'
+  // Header toggle button (in chat header, left of panel)
+  const toggleBtn = document.querySelector('[title="Preview panel"]')
+  if (toggleBtn) toggleBtn.textContent = isCollapsed ? '◀' : '▶'
+  // Panel hide button (inside the panel header, shows ▶ to collapse right)
+  const hideBtn = document.querySelector('.preview-panel__close')
+  if (hideBtn) hideBtn.innerHTML = isCollapsed ? '' : 'Hide ▶'
+  if (hideBtn) hideBtn.title = isCollapsed ? '' : 'Hide panel'
+}
+
+function startResize(e, side) {
+  e.preventDefault()
+  const startX = e.clientX
+  const sidebar = document.querySelector('.sidebar')
+  const rightPanel = document.getElementById('rightPanel')
+  const startWidth = side === 'left' ? sidebar.offsetWidth : rightPanel.offsetWidth
+  const minWidth = 120
+  const maxWidth = 500
+
+  function onMove(ev) {
+    const dx = ev.clientX - startX
+    let newWidth = side === 'left' ? startWidth + dx : startWidth - dx
+    newWidth = Math.max(minWidth, Math.min(maxWidth, newWidth))
+    if (side === 'left') sidebar.style.width = newWidth + 'px'
+    else rightPanel.style.width = newWidth + 'px'
+  }
+
+  function onUp() {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
 }
 
 function toggleSidebar() {
@@ -866,6 +911,9 @@ function toggleSidebar() {
   sidebar.classList.toggle('collapsed')
   const btn = sidebar.querySelector('.sidebar-header .btn-icon:last-child')
   btn.textContent = sidebar.classList.contains('collapsed') ? '▶' : '◀'
+  // Reset width when toggling
+  if (sidebar.classList.contains('collapsed')) sidebar.style.width = ''
+  else sidebar.style.width = '260px'
 }
 
 function closeModal() {
