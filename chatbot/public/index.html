@@ -126,11 +126,13 @@
   /* ── Modal dialog ── */
   .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:200; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity 0.2s; }
   .modal-overlay.open { opacity:1; pointer-events:auto; }
-  .modal { background:var(--surface); border-radius:12px; width:480px; max-width:90vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); }
-  .modal__header { padding:1rem 1.25rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .modal { background:var(--surface); border-radius:12px; width:480px; max-width:90vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); position:relative; }
+  .modal__header { padding:1rem 1.25rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; cursor:grab; user-select:none; }
+  .modal__header:active { cursor:grabbing; }
   .modal__header h2 { font-size:1rem; font-weight:700; }
-  .modal__close { background:none; border:none; cursor:pointer; color:var(--muted); font-size:1.25rem; }
+  .modal__close { background:none; border:none; cursor:pointer; color:var(--muted); font-size:1.25rem; flex-shrink:0; }
   .modal__body { padding:1.25rem; overflow-y:auto; flex:1; }
+  .modal__resize-handle { position:absolute; bottom:0; right:0; width:16px; height:16px; cursor:nwse-resize; background:linear-gradient(135deg,transparent 50%,var(--muted) 50%); border-radius:0 0 12px 0; }
 
   /* ── Preview panel (in-layout, collapsible like sidebar) ── */
   .right-panel .preview-panel { display:flex; flex-direction:column; height:100%; }
@@ -242,6 +244,7 @@
       <button class="modal__close" onclick="closeModal()">✕</button>
     </div>
     <div class="modal__body" id="modalBody"></div>
+    <div class="modal__resize-handle" id="modalResizer" onmousedown="startModalResize(event)"></div>
   </div>
 </div>
 
@@ -918,6 +921,48 @@ function toggleSidebar() {
 
 function closeModal() {
   document.getElementById('modalOverlay').classList.remove('open')
+}
+
+// Make modal draggable via header
+;(() => {
+  const modal = document.querySelector('.modal')
+  const header = modal?.querySelector('.modal__header')
+  if (!modal || !header) return
+  header.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.modal__close')) return
+    modal.style.position = 'relative'
+    const rect = modal.getBoundingClientRect()
+    const ox = e.clientX - rect.left, oy = e.clientY - rect.top
+    modal.style.margin = '0'
+    const onMove = (ev) => {
+      modal.style.left = (ev.clientX - ox - modal.parentElement.getBoundingClientRect().left) + 'px'
+      modal.style.top = (ev.clientY - oy - modal.parentElement.getBoundingClientRect().top) + 'px'
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', () => document.removeEventListener('mousemove', onMove), { once: true })
+  })
+})()
+
+// Make modal resizable via corner handle
+function startModalResize(e) {
+  e.preventDefault()
+  const modal = document.querySelector('.modal')
+  const startX = e.clientX, startY = e.clientY
+  const startW = modal.offsetWidth, startH = modal.offsetHeight
+  const minW = 320, minH = 200
+
+  function onMove(ev) {
+    const w = Math.max(minW, startW + (ev.clientX - startX))
+    const h = Math.max(minH, startH + (ev.clientY - startY))
+    modal.style.width = w + 'px'
+    modal.style.height = h + 'px'
+    modal.style.maxWidth = 'none'
+    modal.style.maxHeight = 'none'
+  }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', () => document.removeEventListener('mousemove', onMove), { once: true })
+  document.body.style.cursor = 'nwse-resize'
+  document.addEventListener('mouseup', () => document.body.style.cursor = '', { once: true })
 }
 
 function openSettingsModal(mode) {
