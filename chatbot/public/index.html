@@ -1092,7 +1092,7 @@ function renderSettingsModal() {
     '<div class="hint">Also set your API key in the 🔑 Keys dialog</div></div>' +
     '<div class="field"><label>Model</label><div style="display:flex;gap:0.5rem">' +
     '<input class="sure-auth__input" id="model" placeholder="' + (modelHints[prov] || 'auto') + '" onchange="onConfigChange()" style="flex:1">' +
-    (prov==='openrouter' ? '<button class="btn btn-secondary" onclick="openModelBrowser()" style="font-size:0.75rem;padding:0.5rem">📋 Browse</button>' : '') +
+    '<button class="btn btn-secondary" onclick="openModelBrowser()" style="font-size:0.75rem;padding:0.375rem 0.5rem">📋 Browse</button>' +
     '</div><div class="hint" id="modelHint">' + (modelHints[prov] || 'Leave empty for provider default') + '</div></div>' +
     '<div class="field"><label>Temperature: <span id="tempValue">' + config.temperature + '</span></label>' +
     '<input type="range" id="temperature" min="0" max="2" step="0.1" value="' + config.temperature + '" oninput="document.getElementById(\'tempValue\').textContent=this.value" onchange="onConfigChange()"></div>' +
