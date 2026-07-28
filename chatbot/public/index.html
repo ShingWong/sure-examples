@@ -34,7 +34,7 @@
   .sure-auth__help { display:block; margin-top:0.25rem; font-size:0.8rem; color:var(--muted); }
 
   /* ── Layout ── */
-  .app { display: flex; height: 100vh; overflow:hidden; }
+  .app { display: flex; height: 100vh; }
   .sidebar { width: 260px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); flex-shrink: 0; transition: width 0.3s; overflow:hidden; }
   .sidebar.collapsed { width: 48px; }
   .sidebar.collapsed .sidebar-header h1,
@@ -46,7 +46,7 @@
   .sidebar.collapsed + .resize-handle { display: none; }
   .resize-handle { width: 4px; cursor: col-resize; flex-shrink: 0; background: transparent; transition: background 0.15s; position:relative; z-index:10; }
   .resize-handle:hover, .resize-handle:active { background: var(--accent); }
-  .main { flex:1; display:flex; flex-direction:column; min-width:0; overflow:hidden; }
+  .main { flex:1; display:flex; flex-direction:column; min-width:0; }
   .right-panel { width: 380px; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); flex-shrink: 0; transition: width 0.3s; overflow:hidden; }
   .right-panel.collapsed { width: 0; border-left: none; }
   .right-panel.collapsed .preview-panel__header,
@@ -823,15 +823,12 @@ function saveMessage(role, content) {
 function startInputResize(e) {
   e.preventDefault()
   const wrap = document.querySelector('.msgs-wrap')
-  const main = wrap.parentElement
   const startY = e.clientY
   const startH = wrap.offsetHeight
   document.body.style.cursor = 'ns-resize'
   document.body.style.userSelect = 'none'
   function onMove(ev) {
-    // Clamp to keep input + status visible at bottom
-    const maxH = main.offsetHeight - document.querySelector('.chat-header').offsetHeight - document.querySelector('.input-area').offsetHeight - document.querySelector('.status').offsetHeight
-    const h = Math.round(Math.max(60, Math.min(maxH, startH + (ev.clientY - startY))))
+    const h = Math.round(Math.max(60, startH + (ev.clientY - startY)))
     wrap.style.flex = '0 0 ' + h + 'px'
   }
   function onUp() { document.body.style.cursor = ''; document.body.style.userSelect = ''; document.removeEventListener('mousemove', onMove); }
