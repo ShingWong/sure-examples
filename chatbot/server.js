@@ -562,9 +562,18 @@ const server = http.createServer(async (req, res) => {
       // Build LLM messages — convert to ContentPart[] if attachment present
       function toContentParts(msgText, att) {
         if (att && att.data && att.mime) {
+          const isImage = att.mime.startsWith('image/')
+          if (isImage) {
+            return [
+              { type: 'text', text: msgText },
+              { type: 'image_url', image_url: { url: att.data.startsWith('data:') ? att.data : 'data:' + att.mime + ';base64,' + att.data } },
+            ]
+          }
+          // File (PDF, XLS, DOCX, etc.) — use the file content type
+          const base64 = att.data.startsWith('data:') ? att.data.split(',')[1] || att.data : att.data
           return [
             { type: 'text', text: msgText },
-            { type: 'image_url', image_url: { url: att.data.startsWith('data:') ? att.data : 'data:' + att.mime + ';base64,' + att.data } },
+            { type: 'file', file: { data: base64, mimeType: att.mime, name: att.name || 'file' } },
           ]
         }
         return msgText

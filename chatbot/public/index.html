@@ -886,7 +886,7 @@ async function sendMessage() {
   try {
     const body = { conversationId: activeConversationId, message: text }
     if (pendingAttachment) {
-      body.attachment = { mime: pendingAttachment.mime, data: pendingAttachment.data.substring(0, 500000), name: pendingAttachment.name }
+      body.attachment = { mime: pendingAttachment.mime, data: pendingAttachment.data.substring(0, 2000000), name: pendingAttachment.name }
       pendingAttachment = null
     }
     const res = await fetch('/api/chat', {
