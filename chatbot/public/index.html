@@ -62,6 +62,11 @@
   .message.system { align-self: center; background: transparent; font-style: italic; font-size: 0.8rem; color: var(--muted); }
   .message .timestamp { display: block; font-size: 0.7rem; opacity: 0.6; margin-top: 0.25rem; }
   .message.error { border-left: 3px solid var(--error); }
+  .msg-actions { display:none; gap:0.25rem; margin-top:0.375rem; }
+  .message:hover .msg-actions { display:flex; }
+  .msg-actions button { background:none; border:none; cursor:pointer; font-size:0.75rem; padding:0.125rem 0.25rem; border-radius:3px; color:var(--muted); line-height:1; }
+  .msg-actions button:hover { background:var(--highlight); color:var(--text); }
+  .msg-body { line-height:1.5; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
   /* ── Input ── */
@@ -363,14 +368,6 @@ let messagesCache = {}  // conversationId → messages[]
 // ── Personas ──
 
 
-// Restore persisted settings + conversations from cookies
-const saved = cookieStore.getAll({ theme: 'nord' })
-if (saved.theme) config.theme = saved.theme
-if (saved.provider) config.provider = saved.provider
-if (saved.model) config.model = saved.model
-if (saved.temperature) config.temperature = parseFloat(saved.temperature)
-if (saved.baseUrl) config.baseUrl = saved.baseUrl
-
 function saveConversations() {
   const maxBytes = 4000
   // Build a truncated copy for the cookie — never modify messagesCache in place
@@ -455,13 +452,18 @@ async function setTheme(name, btn) {
 async function loadConfig() {
   try {
     const res = await fetch('/api/config')
-    config = await res.json()
+    const serverConfig = await res.json()
+    // Apply server config first, then override with cookie values (survive restarts)
+    const saved = cookieStore.getAll({ theme: 'nord' })
+    config.provider = saved.provider || serverConfig.provider
+    config.model = saved.model || serverConfig.model || ''
+    config.temperature = parseFloat(saved.temperature) || serverConfig.temperature || 0.7
+    config.theme = saved.theme || serverConfig.theme || 'nord'
+    config.baseUrl = saved.baseUrl || serverConfig.baseUrl || ''
     document.getElementById('provider').value = config.provider
-    document.getElementById('apiKey').value = config.apiKey || ''
-    document.getElementById('baseUrl').value = config.baseUrl || ''
-    document.getElementById('model').value = config.model || ''
-    document.getElementById('temperature').value = config.temperature || 0.7
-    document.getElementById('tempValue').textContent = config.temperature || 0.7
+    document.getElementById('model').value = config.model
+    document.getElementById('temperature').value = config.temperature
+    document.getElementById('tempValue').textContent = config.temperature
     setTheme(config.theme, document.querySelector(`.theme-btn[data-theme="${config.theme}"]`))
     updateProviderHint(config.provider)
     toggleBaseUrlField(config.provider)
@@ -562,9 +564,25 @@ function renderMessages(convId) {
   const msgs = messagesCache[convId] || []
   for (const m of msgs) {
     const el = document.createElement('div')
-    el.className = `message ${m.role}`
+    el.className = `message sure-markdown ${m.role}`
     if (m.content.startsWith('Error:')) el.classList.add('error')
-    el.innerHTML = renderMarkdown(m.content) + `<span class="timestamp">${new Date(m.timestamp).toLocaleTimeString()}</span>`
+    el.dataset.raw = m.content
+    const body = document.createElement('div')
+    body.className = 'msg-body'
+    body.innerHTML = renderMarkdown(m.content)
+    el.appendChild(body)
+    const ts = document.createElement('span')
+    ts.className = 'timestamp'
+    ts.textContent = new Date(m.timestamp).toLocaleTimeString()
+    el.appendChild(ts)
+    const actions = document.createElement('div')
+    actions.className = 'msg-actions'
+    if (m.role === 'user') {
+      actions.innerHTML = '<button onclick="editMessage(this)" title="Edit">✎</button><button onclick="deleteMessage(this)" title="Delete">🗑</button><button onclick="copyMessage(this)" title="Copy">📋</button><button onclick="resendMessage(this)" title="Resend">↻</button>'
+    } else {
+      actions.innerHTML = '<button onclick="copyMessage(this)" title="Copy">📋</button><button onclick="sendToSidebar(this)" title="Preview">▶</button><button onclick="toggleMarkdown(this)" title="Toggle markdown">¶</button>'
+    }
+    el.appendChild(actions)
     container.appendChild(el)
   }
   container.scrollTop = container.scrollHeight
@@ -647,9 +665,123 @@ function appendMessage(role, content) {
   const el = document.createElement('div')
   el.className = `message sure-markdown ${role}`
   if (content.startsWith('Error:')) el.classList.add('error')
-  el.innerHTML = renderMarkdown(content) + `<span class="timestamp">${new Date().toLocaleTimeString()}</span>`
+  const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)
+  el.dataset.msgId = msgId
+  el.dataset.raw = content
+
+  // Render markdown (default on)
+  const body = document.createElement('div')
+  body.className = 'msg-body'
+  body.innerHTML = renderMarkdown(content)
+  el.appendChild(body)
+
+  // Timestamp
+  const ts = document.createElement('span')
+  ts.className = 'timestamp'
+  ts.textContent = new Date().toLocaleTimeString()
+  el.appendChild(ts)
+
+  // Action buttons
+  const actions = document.createElement('div')
+  actions.className = 'msg-actions'
+  if (role === 'user') {
+    actions.innerHTML =
+      '<button onclick="editMessage(this)" title="Edit">✎</button>' +
+      '<button onclick="deleteMessage(this)" title="Delete">🗑</button>' +
+      '<button onclick="copyMessage(this)" title="Copy">📋</button>' +
+      '<button onclick="resendMessage(this)" title="Resend">↻</button>'
+  } else {
+    actions.innerHTML =
+      '<button onclick="copyMessage(this)" title="Copy">📋</button>' +
+      '<button onclick="sendToSidebar(this)" title="Preview">▶</button>' +
+      '<button onclick="toggleMarkdown(this)" title="Toggle markdown">¶</button>'
+  }
+  el.appendChild(actions)
   container.appendChild(el)
   container.scrollTop = container.scrollHeight
+  saveMessage(role, content)
+}
+
+// ── Message actions ──
+function getMsgEl(btn) { return btn.closest('.message') }
+
+function copyMessage(btn) {
+  const el = getMsgEl(btn)
+  const text = el.dataset.raw
+  navigator.clipboard.writeText(text).then(() => showToast('info', 'Copied')).catch(() => {})
+}
+
+function editMessage(btn) {
+  const el = getMsgEl(btn)
+  const idx = findMsgIndex(el)
+  if (idx < 0) return
+  if (!confirm('Edit messages from this point? Messages after will be deleted.')) return
+  truncateMessages(el)
+  const text = el.dataset.raw
+  document.getElementById('messageInput').value = text
+  document.getElementById('messageInput').focus()
+}
+
+function deleteMessage(btn) {
+  if (!confirm('Delete messages from this point?')) return
+  truncateMessages(getMsgEl(btn))
+}
+
+function resendMessage(btn) {
+  const el = getMsgEl(btn)
+  const idx = findMsgIndex(el)
+  if (idx < 0) return
+  if (!confirm('Resend from this message? Messages after will be deleted.')) return
+  const text = el.dataset.raw
+  truncateMessages(el)
+  document.getElementById('messageInput').value = text
+  sendMessage()
+}
+
+function sendToSidebar(btn) {
+  const el = getMsgEl(btn)
+  const text = el.dataset.raw
+  savePanelState({ mode: 'preview', contentType: 'text', content: text, title: 'Message Preview' })
+  toggleRightPanel()
+}
+
+function toggleMarkdown(btn) {
+  const el = getMsgEl(btn)
+  const body = el.querySelector('.msg-body')
+  const raw = el.dataset.raw
+  if (body.dataset.rawMode === 'true') {
+    body.innerHTML = renderMarkdown(raw)
+    body.dataset.rawMode = 'false'
+    btn.style.opacity = '1'
+  } else {
+    body.textContent = raw
+    body.dataset.rawMode = 'true'
+    btn.style.opacity = '0.4'
+  }
+}
+
+function findMsgIndex(el) {
+  const container = document.getElementById('messages')
+  const idx = Array.from(container.children).indexOf(el)
+  return idx
+}
+
+function truncateMessages(fromEl) {
+  const convId = activeConversationId
+  if (!convId || !messagesCache[convId]) return
+  const container = document.getElementById('messages')
+  const idx = Array.from(container.children).indexOf(fromEl)
+  const msgs = messagesCache[convId]
+  // Find the message in the cache by matching content and role
+  const fromRole = fromEl.classList.contains('user') ? 'user' : 'assistant'
+  const fromRaw = fromEl.dataset.raw
+  const cacheIdx = msgs.findIndex(m => m.role === fromRole && m.content === fromRaw)
+  if (cacheIdx < 0) return
+  // Remove all messages from this point forward
+  msgs.splice(cacheIdx)
+  // Remove DOM elements from this point forward
+  while (container.children.length > idx) container.removeChild(container.lastChild)
+  saveConversations()
 }
 
 function saveMessage(role, content) {
@@ -678,7 +810,6 @@ async function sendMessage() {
 
   input.value = ''
   appendMessage('user', text)
-  saveMessage('user', text)
   isLoading = true
   setStatus('loading', 'Thinking...')
   document.getElementById('sendBtn').disabled = true
@@ -693,14 +824,12 @@ async function sendMessage() {
     const data = await res.json()
     if (data.message) {
       appendMessage(data.message.role, data.message.content)
-      saveMessage(data.message.role, data.message.content)
     }
     if (data.error) {
       showToast('error', data.error)
     }
   } catch (e) {
     appendMessage('assistant', 'Error: connection failed')
-    saveMessage('assistant', 'Error: connection failed')
     showToast('error', 'Failed to send message')
   } finally {
     isLoading = false
