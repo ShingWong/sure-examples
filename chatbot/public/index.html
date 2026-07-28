@@ -387,26 +387,26 @@ let messagesCache = {}  // conversationId → messages[]
 // ── Personas ──
 
 
+let _savePending = false
+
 function saveConversations() {
-  try {
-    const payload = JSON.stringify({ list: conversations, messages: messagesCache })
-    // Compress with pako deflate (3-5x reduction for markdown text)
-    const compressed = pako.deflate(payload, { level: 6 })
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(compressed)))
-    if (base64.length > 4500000) {
-      // Emergency truncation at 4.5MB — keep last 5 convs, 10 msgs each
-      conversations = conversations.slice(0, 5)
-      for (const c of conversations) {
-        if (messagesCache[c.id] && messagesCache[c.id].length > 10) messagesCache[c.id] = messagesCache[c.id].slice(-10)
-      }
-      const p2 = JSON.stringify({ list: conversations, messages: messagesCache })
-      const c2 = pako.deflate(p2, { level: 6 })
-      const b2 = btoa(String.fromCharCode(...new Uint8Array(c2)))
-      localStorage.setItem('sure_conversations', b2)
-    } else {
+  // Limit to 20 conversations, 50 msgs each to keep data under 30KB compressed
+  if (conversations.length > 20) conversations = conversations.slice(0, 20)
+  for (const id of Object.keys(messagesCache)) {
+    if (messagesCache[id] && messagesCache[id].length > 50) messagesCache[id] = messagesCache[id].slice(-50)
+  }
+  // Defer compression to avoid blocking UI on large histories
+  if (_savePending) return
+  _savePending = true
+  setTimeout(() => {
+    _savePending = false
+    try {
+      const payload = JSON.stringify({ list: conversations, messages: messagesCache })
+      const compressed = pako.deflate(payload, { level: 3 }) /* level 3 = fast, ~80% of max compression */
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(compressed)))
       localStorage.setItem('sure_conversations', base64)
-    }
-  } catch (e) { /* localStorage full or disabled */ }
+    } catch (e) { /* storage full or disabled */ }
+  }, 200)
 }
 
 function loadConversationsFromCookie() {
@@ -440,11 +440,8 @@ function loadConversationsFromCookie() {
   return false
 }
 
-// Load conversations from cookie first
-if (!loadConversationsFromCookie()) {
-  // Fall back to server on first visit
-  // (no-op — newConversation() will create the first one)
-}
+// Load saved conversations
+loadConversationsFromCookie()
 
 // ── Theme ──
 async function setTheme(name, btn) {
