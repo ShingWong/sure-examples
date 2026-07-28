@@ -737,7 +737,11 @@ function sendToSidebar(btn) {
   const el = getMsgEl(btn)
   const text = el.dataset.raw
   savePanelState({ mode: 'preview', contentType: 'text', content: text, title: 'Message Preview' })
-  toggleRightPanel()
+  // Ensure the right panel is open, not toggled
+  const panel = document.getElementById('rightPanel')
+  panel.classList.remove('collapsed')
+  const toggleBtn = document.querySelector('[title="Preview panel"]')
+  if (toggleBtn) toggleBtn.textContent = '▶'
 }
 
 function toggleMarkdown(btn) {
