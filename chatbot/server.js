@@ -331,26 +331,11 @@ const server = http.createServer(async (req, res) => {
     // GET /api/models — list available models for the current provider
     if (req.method === 'GET' && pathname === '/api/models') {
       try {
+        const a = await getAgent(currentConfig)
         let models = []
-        const prov = currentConfig.provider
-        if (prov === 'openrouter' && keyStore['openrouter']) {
-          const key = decryptKey(keyStore['openrouter'].key)
-          const ac = new AbortController()
-          const to = setTimeout(() => ac.abort(), 20000)
-          const res = await fetch('https://openrouter.ai/api/v1/models', {
-            headers: { Authorization: `Bearer ${key}` }, signal: ac.signal,
-          }).finally(() => clearTimeout(to))
-          if (res.ok) {
-            const data = await res.json()
-            models = (data.data || []).filter((m) => m.architecture?.modality === 'text').map((m) => m.id).sort()
-          }
-        }
-        if (models.length === 0) {
-          const a = await getAgent(currentConfig)
-          try { models = await a.context.provider.getAvailableModels() } catch {}
-        }
+        try { models = await a.context.provider.getAvailableModels() } catch (e) { models = [] }
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ models, provider: prov, selected: currentConfig.model || '' }))
+        res.end(JSON.stringify({ models, provider: currentConfig.provider, selected: currentConfig.model || '' }))
       } catch (err) {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ models: [], provider: currentConfig.provider, error: err.message }))
