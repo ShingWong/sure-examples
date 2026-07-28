@@ -819,22 +819,20 @@ function saveMessage(role, content) {
   renderConversations()
 }
 
-// ── Messages area resize (CSS Grid — sets row 2 height) ──
+// ── Messages area resize ──
 function startInputResize(e) {
   e.preventDefault()
   const main = document.querySelector('.main')
-  const msgs = document.getElementById('messages')
   const startY = e.clientY
-  const startH = msgs.offsetHeight
+  const startH = document.getElementById('messages').offsetHeight
+  main.style.gridTemplateRows = 'auto ' + startH + 'px auto auto'
   document.body.style.cursor = 'ns-resize'
   document.body.style.userSelect = 'none'
-  // Set initial row 2 to current height
-  main.style.gridTemplateRows = 'auto ' + startH + 'px auto auto'
   function onMove(ev) {
     const h = Math.round(Math.max(60, startH + (ev.clientY - startY)))
     main.style.gridTemplateRows = 'auto ' + h + 'px auto auto'
   }
-  function onUp() { document.body.style.cursor = ''; document.body.style.userSelect = ''; main.style.gridTemplateRows = ''; document.removeEventListener('mousemove', onMove); }
+  function onUp() { document.body.style.cursor = ''; document.body.style.userSelect = ''; document.removeEventListener('mousemove', onMove); }
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp, { once: true })
 }
