@@ -543,7 +543,7 @@ const server = http.createServer(async (req, res) => {
     // POST /api/chat — send a message, get a response
     if (req.method === 'POST' && pathname === '/api/chat') {
       const body = await parseBody(req)
-      const { conversationId, message } = body
+      const { conversationId, message, attachment } = body
 
       if (!conversationId || !message) {
         res.writeHead(400)
@@ -559,12 +559,28 @@ const server = http.createServer(async (req, res) => {
         if (conversations.length > 50) conversations = conversations.slice(-50)
       }
 
-      // Add user message
-      addMessage(conversationId, 'user', message)
+      // Build LLM messages — convert to ContentPart[] if attachment present
+      function toContentParts(msgText, att) {
+        if (att && att.data && att.mime) {
+          return [
+            { type: 'text', text: msgText },
+            { type: 'image_url', image_url: { url: att.data.startsWith('data:') ? att.data : 'data:' + att.mime + ';base64,' + att.data } },
+          ]
+        }
+        return msgText
+      }
+
+      const userContent = toContentParts(message, attachment)
+      addMessage(conversationId, 'user', typeof userContent === 'string' ? userContent : JSON.stringify(userContent))
 
       // Build conversation history for LLM
       conv = conversations.find(c => c.id === conversationId)
-      const messages = conv.messages.map(m => ({ role: m.role, content: m.content }))
+      const messages = conv.messages.map(m => {
+        let content = m.content
+        // Check if stored content was a JSON ContentPart[] (from a previous attachment)
+        try { const p = JSON.parse(content); if (Array.isArray(p)) content = p } catch {}
+        return { role: m.role, content }
+      })
 
       // Call LLM via sure-gentic Agent + Skill
       try {

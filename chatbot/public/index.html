@@ -837,14 +837,23 @@ function startInputResize(e) {
 }
 
 // ── File upload ──
+let pendingAttachment = null  // { mime, data (base64), name }
+
 function handleFileUpload(event) {
   const file = event.target.files?.[0]
   if (!file) return
-  const input = document.getElementById('messageInput')
-  const marker = '📎' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)\n'
-  input.value = marker
-  input.focus()
-  showToast('info', 'Attached: ' + file.name)
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const dataUrl = e.target?.result
+    if (typeof dataUrl === 'string') {
+      pendingAttachment = { mime: file.type || 'image/png', data: dataUrl, name: file.name, size: file.size }
+      const input = document.getElementById('messageInput')
+      input.value = '📎' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)\n'
+      input.focus()
+      showToast('info', 'Attached: ' + file.name)
+    }
+  }
+  reader.readAsDataURL(file)
   event.target.value = ''
 }
 
@@ -875,10 +884,15 @@ async function sendMessage() {
   input.disabled = true
 
   try {
+    const body = { conversationId: activeConversationId, message: text }
+    if (pendingAttachment) {
+      body.attachment = { mime: pendingAttachment.mime, data: pendingAttachment.data.substring(0, 500000), name: pendingAttachment.name }
+      pendingAttachment = null
+    }
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ conversationId: activeConversationId, message: text }),
+      body: JSON.stringify(body),
     })
     const data = await res.json()
     if (data.message) {
