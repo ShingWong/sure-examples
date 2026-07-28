@@ -840,22 +840,11 @@ function startInputResize(e) {
 function handleFileUpload(event) {
   const file = event.target.files?.[0]
   if (!file) return
-  const reader = new FileReader()
-  reader.onload = (e) => {
-    const text = e.target?.result
-    if (typeof text === 'string') {
-      // For text files, insert content into input
-      if (file.type.startsWith('text/') || file.name.endsWith('.md') || file.name.endsWith('.txt') || file.name.endsWith('.json') || file.name.endsWith('.js') || file.name.endsWith('.ts') || file.name.endsWith('.py')) {
-        document.getElementById('messageInput').value = 'File: ' + file.name + '\n```\n' + text.substring(0, 4000) + '\n```'
-        showToast('info', 'File loaded: ' + file.name)
-      } else {
-        // Binary files — just note the filename
-        document.getElementById('messageInput').value = '[Attached: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)]'
-        showToast('info', 'File attached: ' + file.name)
-      }
-    }
-  }
-  reader.readAsText(file)
+  const input = document.getElementById('messageInput')
+  const marker = '📎' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)\n'
+  input.value = marker
+  input.focus()
+  showToast('info', 'Attached: ' + file.name)
   event.target.value = ''
 }
 
