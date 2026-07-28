@@ -62,11 +62,6 @@
   .message.system { align-self: center; background: transparent; font-style: italic; font-size: 0.8rem; color: var(--muted); }
   .message .timestamp { display: block; font-size: 0.7rem; opacity: 0.6; margin-top: 0.25rem; }
   .message.error { border-left: 3px solid var(--error); }
-  .msg-actions { display:none; gap:0.25rem; margin-top:0.375rem; }
-  .message:hover .msg-actions { display:flex; }
-  .msg-actions button { background:none; border:none; cursor:pointer; font-size:0.75rem; padding:0.125rem 0.25rem; border-radius:3px; color:var(--muted); line-height:1; }
-  .msg-actions button:hover { background:var(--highlight); color:var(--text); }
-  .msg-body { line-height:1.5; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
   /* ── Input ── */
@@ -1290,17 +1285,48 @@ function renderPanel() {
   document.getElementById('panelTitle').textContent = panelState.title || 'Preview'
   const body = document.getElementById('panelBody')
   if (!body) return
+  const content = panelState.content || ''
   if (panelState.mode === 'preview') {
-    if (panelState.contentType === 'svg') {
-      body.innerHTML = `<div style="padding:1rem;text-align:center">${panelState.content}</div>`
-    } else if (panelState.contentType === 'html') {
-      body.innerHTML = `<iframe sandbox="allow-scripts" srcdoc="${escHtml(panelState.content)}"></iframe>`
-    } else {
-      body.innerHTML = `<pre style="white-space:pre-wrap;font-size:0.8125rem">${escHtml(panelState.content || '')}</pre>`
-    }
+    // Render preview in a message-style container with actions
+    body.innerHTML =
+      `<div class="message sure-markdown assistant" style="max-width:none;border:1px solid var(--border)">
+        <div class="msg-body" id="previewBody">${renderPreviewContent(content)}</div>
+        <div class="msg-actions" style="display:flex">
+          <button onclick="copyPreview()" title="Copy">📋</button>
+          <button onclick="togglePreviewMd()" title="Toggle markdown">¶</button>
+          <button onclick="clearPreview()" title="Clear">🗑</button>
+        </div>
+      </div>`
   } else {
-    body.innerHTML = `<p style="color:var(--muted)">${panelState.content || 'No content'}</p>`
+    body.innerHTML = `<p style="color:var(--muted)">${content || 'No content'}</p>`
   }
+}
+
+function renderPreviewContent(content) {
+  if (panelState.contentType === 'svg') return `<div style="padding:1rem;text-align:center">${content}</div>`
+  if (panelState.contentType === 'html') return `<iframe sandbox="allow-scripts" srcdoc="${escHtml(content)}" style="width:100%;height:60vh;border:none;border-radius:6px"></iframe>`
+  return renderMarkdown(content)
+}
+
+function copyPreview() {
+  navigator.clipboard.writeText(panelState.content || '').then(() => showToast('info', 'Copied')).catch(() => {})
+}
+
+function togglePreviewMd() {
+  const body = document.getElementById('previewBody')
+  if (!body) return
+  if (body.dataset.rawMode === 'true') {
+    body.innerHTML = renderPreviewContent(panelState.content || '')
+    body.dataset.rawMode = 'false'
+  } else {
+    body.textContent = panelState.content || ''
+    body.dataset.rawMode = 'true'
+  }
+}
+
+function clearPreview() {
+  panelState = { mode: 'preview', contentType: '', content: '', title: 'Content Preview' }
+  renderPanel()
 }
 
 function loadToolList() {
