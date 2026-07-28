@@ -822,32 +822,25 @@ function saveMessage(role, content) {
 // ── Messages area resize ──
 function startInputResize(e) {
   e.preventDefault()
-  const main = document.querySelector('.main')
   const msgs = document.getElementById('messages')
-  const input = document.querySelector('.input-area')
-  const header = document.querySelector('.chat-header')
-  const status = document.querySelector('.status')
   const startY = e.clientY
   const startH = msgs.offsetHeight
   document.body.style.cursor = 'ns-resize'
   document.body.style.userSelect = 'none'
+  // Switch to fixed grid layout during drag
+  const main = document.querySelector('.main')
+  main.style.display = 'grid'
+  main.style.gridTemplateRows = 'auto ' + startH + 'px auto auto'
+  msgs.style.overflowY = 'auto'
   function onMove(ev) {
     const h = Math.round(Math.max(80, startH + (ev.clientY - startY)))
-    // Pin everything so the container has no flex ambiguity
-    header.style.flex = '0 0 auto'
-    msgs.style.flex = '0 0 ' + h + 'px'
-    input.style.flex = '0 0 auto'
-    status.style.flex = '0 0 auto'
-    msgs.style.height = h + 'px'
+    main.style.gridTemplateRows = 'auto ' + h + 'px auto auto'
   }
   function onUp() {
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
-    header.style.flex = ''
-    msgs.style.flex = ''
-    input.style.flex = ''
-    status.style.flex = ''
-    msgs.style.height = ''
+    main.style.display = ''
+    main.style.gridTemplateRows = ''
     document.removeEventListener('mousemove', onMove)
   }
   document.addEventListener('mousemove', onMove)
