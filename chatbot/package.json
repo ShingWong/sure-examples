@@ -13,6 +13,7 @@
     "tsx": "^4.0.0"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "sure-gentic": "file:../../sure-gentic",
     "sure-state": "file:../../sure-state",
     "sure-ui": "file:../../sure-ui"

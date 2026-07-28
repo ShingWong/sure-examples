@@ -203,7 +203,7 @@ class GenerateContentSkill extends BaseSkill {
   name = 'generate_content'
   description = 'Generate SVG, HTML, or markdown content'
   async execute(ctx) {
-    const result = await this.callLLM(this.agent, [
+    const result = await this.callLLM(ctx._agent, [
       { role: 'system', content: `You generate content based on user requests. 
 If the user asks for an SVG, output the SVG code wrapped in \`\`\`svg...\`\`\`.
 If the user asks for HTML, output the full HTML wrapped in \`\`\`html...\`\`\`.
@@ -220,7 +220,7 @@ Always produce complete, working code.` },
     } else {
       panelState = { mode: 'preview', contentType: 'text', content: result, title: 'Content', updatedAt: Date.now() }
     }
-    return { success: true, data: result, panelState }
+    return result
   }
 }
 
@@ -448,8 +448,8 @@ const server = http.createServer(async (req, res) => {
         const lowerMsg = message.toLowerCase()
         if (lowerMsg.includes('svg') || lowerMsg.includes('logo') || lowerMsg.includes('html') || lowerMsg.includes('page') || lowerMsg.includes('quiz')) {
           const skill = new GenerateContentSkill()
-          const result = await agent.run(skill, { prompt: message })
-          const reply = addMessage(conversationId, 'assistant', result.data?.substring(0, 500) || result.data || 'Generated')
+          const result = await agent.run(skill, { prompt: message, _agent: agent.context })
+          const reply = addMessage(conversationId, 'assistant', (result.data || 'Generated').substring(0, 500))
           // Update panel via API
           try { await fetch(`http://localhost:${PORT}/api/panel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(panelState) }) } catch {}
           res.writeHead(200, { 'Content-Type': 'application/json' })
@@ -462,12 +462,12 @@ const server = http.createServer(async (req, res) => {
           name = 'chat'
           description = 'Respond to user message'
           async execute(ctx) {
-            return this.callLLM(this.agent, ctx.messages)
+            return this.callLLM(ctx._agent, ctx.messages)
           }
         }
 
         const skill = new ChatSkill()
-        const result = await agent.run(skill, { messages })
+        const result = await agent.run(skill, { messages, _agent: agent.context })
 
         const content = result.success ? result.data : `Error: ${result.error}`
         const reply = addMessage(conversationId, 'assistant', content)
