@@ -373,22 +373,22 @@ if (saved.baseUrl) config.baseUrl = saved.baseUrl
 
 function saveConversations() {
   const maxBytes = 4000
-  // Step 1: truncate message content to 300 chars
+  // Build a truncated copy for the cookie — never modify messagesCache in place
+  let cookMsgs = {}
   for (const id of Object.keys(messagesCache)) {
-    messagesCache[id] = messagesCache[id].map(m => ({ ...m, content: m.content.length > 300 ? m.content.substring(0, 300) + '...' : m.content }))
+    cookMsgs[id] = messagesCache[id].map(m => ({ ...m, content: m.content.length > 300 ? m.content.substring(0, 300) + '...' : m.content }))
   }
-  let payload = JSON.stringify({ list: conversations, messages: messagesCache })
+  let cookList = conversations
+  let payload = JSON.stringify({ list: cookList, messages: cookMsgs })
   if (payload.length > maxBytes) {
-    // Step 2: keep only last 3 convs, 5 msgs each
-    conversations = conversations.slice(0, 3)
-    for (const c of conversations) {
-      if (messagesCache[c.id] && messagesCache[c.id].length > 5) messagesCache[c.id] = messagesCache[c.id].slice(-5)
+    cookList = cookList.slice(0, 3)
+    for (const c of cookList) {
+      if (cookMsgs[c.id] && cookMsgs[c.id].length > 5) cookMsgs[c.id] = cookMsgs[c.id].slice(-5)
     }
-    payload = JSON.stringify({ list: conversations, messages: messagesCache })
+    payload = JSON.stringify({ list: cookList, messages: cookMsgs })
   }
   if (payload.length > maxBytes) {
-    // Step 3: keep only conversation list, no messages
-    payload = JSON.stringify({ list: conversations, messages: {} })
+    payload = JSON.stringify({ list: cookList, messages: {} })
   }
   cookieStore.set('conversations', payload)
 }
