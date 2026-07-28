@@ -46,7 +46,7 @@
   .sidebar.collapsed + .resize-handle { display: none; }
   .resize-handle { width: 4px; cursor: col-resize; flex-shrink: 0; background: transparent; transition: background 0.15s; position:relative; z-index:10; }
   .resize-handle:hover, .resize-handle:active { background: var(--accent); }
-  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow:hidden; }
   .right-panel { width: 380px; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); flex-shrink: 0; transition: width 0.3s; overflow:hidden; }
   .right-panel.collapsed { width: 0; border-left: none; }
   .right-panel.collapsed .preview-panel__header,
@@ -82,7 +82,7 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
   /* ── Input ── */
-  .input-area { border-top: 1px solid var(--border); background: var(--surface); display:flex; flex-direction:column; flex-shrink:0; }
+  .input-area { border-top: 1px solid var(--border); background: var(--surface); display:flex; flex-direction:column; flex:0 0 auto; }
   .input-resize { height:4px; cursor:ns-resize; background:transparent; flex-shrink:0; }
   .input-resize:hover, .input-resize:active { background:var(--accent); }
   .input-row { display: flex; align-items:flex-end; gap:0.5rem; padding:0.75rem 1rem; }
@@ -827,9 +827,8 @@ function startInputResize(e) {
   const startH = msgs.offsetHeight
   document.body.style.cursor = 'ns-resize'
   function onMove(ev) {
-    // Dragging up → messages taller; dragging down → messages shorter
-    msgs.style.height = Math.max(100, startH + (startY - ev.clientY)) + 'px'
-    msgs.style.flex = 'none'
+    const h = Math.max(100, startH + (startY - ev.clientY))
+    msgs.style.flex = '0 0 ' + h + 'px'
   }
   function onUp() { document.body.style.cursor = ''; document.removeEventListener('mousemove', onMove); }
   document.addEventListener('mousemove', onMove)
