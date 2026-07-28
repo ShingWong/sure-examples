@@ -251,7 +251,9 @@ async function getAgent(config) {
   }
   if (config.model) process.env.AI_MODEL = config.model
   process.env.AI_TEMPERATURE = String(config.temperature)
-  return new Agent()
+  const provider = factory.getProvider(process.env.AI_PROVIDER)
+  if (!provider) throw new Error('No provider registered for: ' + process.env.AI_PROVIDER)
+  return new Agent(provider)
 }
 
 // ── sure-state integration ──
