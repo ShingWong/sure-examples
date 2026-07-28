@@ -387,11 +387,11 @@ let messagesCache = {}  // conversationId → messages[]
 
 
 function saveConversations() {
-  const maxBytes = 4000
+  const maxBytes = 4500
   // Build a truncated copy for the cookie — never modify messagesCache in place
   let cookMsgs = {}
   for (const id of Object.keys(messagesCache)) {
-    cookMsgs[id] = messagesCache[id].map(m => ({ ...m, content: m.content.length > 300 ? m.content.substring(0, 300) + '...' : m.content }))
+    cookMsgs[id] = messagesCache[id].map(m => ({ ...m, content: m.content.length > 1000 ? m.content.substring(0, 1000) : m.content }))
   }
   let cookList = conversations
   let payload = JSON.stringify({ list: cookList, messages: cookMsgs })
