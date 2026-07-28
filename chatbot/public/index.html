@@ -167,6 +167,7 @@
   .right-panel .preview-panel__body svg { max-width:100%; height:auto; }
   .right-panel .preview-panel iframe { width:100%; height:100%; border:none; border-radius:6px; }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
 </head>
 <body>
 <div id="authPage" class="hidden">
@@ -387,24 +388,23 @@ let messagesCache = {}  // conversationId → messages[]
 
 
 function saveConversations() {
-  // Store full conversations in localStorage (up to 5MB, no truncation needed)
   try {
     const payload = JSON.stringify({ list: conversations, messages: messagesCache })
-    if (payload.length > 4000000) {
-      // Emergency truncation at 4MB — keep last 10 convs, 20 msgs each
-      conversations = conversations.slice(0, 10)
+    // Compress with pako deflate (3-5x reduction for markdown text)
+    const compressed = pako.deflate(payload, { level: 6 })
+    const base64 = btoa(String.fromCharCode(...new Uint8Array(compressed)))
+    if (base64.length > 4500000) {
+      // Emergency truncation at 4.5MB — keep last 5 convs, 10 msgs each
+      conversations = conversations.slice(0, 5)
       for (const c of conversations) {
-        if (messagesCache[c.id] && messagesCache[c.id].length > 20) messagesCache[c.id] = messagesCache[c.id].slice(-20)
+        if (messagesCache[c.id] && messagesCache[c.id].length > 10) messagesCache[c.id] = messagesCache[c.id].slice(-10)
       }
       const p2 = JSON.stringify({ list: conversations, messages: messagesCache })
-      if (p2.length > 4000000) {
-        // Last resort: keep only conversation list, no messages
-        localStorage.setItem('sure_conversations', JSON.stringify({ list: conversations, messages: {} }))
-        return
-      }
-      localStorage.setItem('sure_conversations', p2)
+      const c2 = pako.deflate(p2, { level: 6 })
+      const b2 = btoa(String.fromCharCode(...new Uint8Array(c2)))
+      localStorage.setItem('sure_conversations', b2)
     } else {
-      localStorage.setItem('sure_conversations', payload)
+      localStorage.setItem('sure_conversations', base64)
     }
   } catch (e) { /* localStorage full or disabled */ }
 }
@@ -413,7 +413,23 @@ function loadConversationsFromCookie() {
   try {
     const raw = localStorage.getItem('sure_conversations')
     if (raw) {
-      const data = JSON.parse(raw)
+      // Detect compressed format (base64 with deflate) vs old uncompressed JSON
+      if (raw.startsWith('{')) {
+        // Old format (uncompressed) — migrate to compressed
+        const data = JSON.parse(raw)
+        if (data.list && Array.isArray(data.list)) {
+          conversations = data.list
+          messagesCache = data.messages || {}
+          saveConversations() // re-save as compressed
+          return true
+        }
+      }
+      // New format: base64 → deflate inflate → JSON
+      const binary = atob(raw)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const decompressed = pako.inflate(bytes, { to: 'string' })
+      const data = JSON.parse(decompressed)
       if (data.list && Array.isArray(data.list)) {
         conversations = data.list
         messagesCache = data.messages || {}
