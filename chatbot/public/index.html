@@ -218,17 +218,16 @@
       <div style="display:flex;align-items:center;gap:0.5rem">
         <h2 id="chatTitle">sure-chatbot</h2>
       </div>
-      <div class="sure-menu">
+      <div class="sure-menu" style="justify-content:flex-end">
+        <button class="sure-menu__item" onclick="openSettingsModal('keys')" title="API Keys">🔑</button>
+        <button class="sure-menu__item" onclick="openSettingsModal('settings')" title="Provider / Model / Temperature">⚙</button>
+        <button class="sure-menu__item" onclick="openSettingsModal('models')" title="Models">🤖</button>
+        <button class="sure-menu__item" onclick="openSettingsModal('theme')" title="Theme">🎨</button>
+        <button class="sure-menu__item" onclick="openSettingsModal('about')" title="Help / About">❓</button>
         <button class="sure-menu__item" onclick="logout()" title="Logout">🚪</button>
         <div class="sure-menu__divider"></div>
-        <button class="sure-menu__item" onclick="openSettingsModal('theme')" title="Theme">🎨</button>
-        <button class="sure-menu__item" onclick="openSettingsModal('models')" title="Models">🤖</button>
-        <button class="sure-menu__item" onclick="openSettingsModal('settings')" title="Provider / Model / Temperature">⚙</button>
-        <button class="sure-menu__item" onclick="openSettingsModal('keys')" title="API Keys">🔑</button>
-        <div class="sure-menu__divider"></div>
         <button class="sure-menu__item" onclick="openSettingsModal('inspect')" title="Inspect">📋</button>
-        <button class="sure-menu__item" onclick="openSettingsModal('about')" title="Help / About">❓</button>
-        <button class="sure-menu__item" onclick="toggleRightPanel()" title="Preview panel" style="border-left:1px solid var(--border);padding-left:0.5rem;margin-left:0.25rem">▶</button>
+        <button class="sure-menu__item" onclick="toggleRightPanel()" title="Preview panel">▶</button>
       </div>
     </div>
     <div class="msgs-wrap"><div class="messages" id="messages"></div></div>
