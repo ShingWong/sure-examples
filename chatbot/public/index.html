@@ -215,6 +215,7 @@
       <div style="display:flex;align-items:center;gap:0.25rem">
         <button class="btn-icon" onclick="openSettingsModal('settings')" title="Settings">⚙</button>
         <button class="btn-icon" onclick="openSettingsModal('keys')" title="API Keys">🔑</button>
+        <button class="btn-icon" onclick="openSettingsModal('models')" title="Models">🤖</button>
         <button class="btn-icon" onclick="openSettingsModal('inspect')" title="Inspect">📋</button>
         <button class="btn-icon" onclick="clearMessages()" title="Clear messages">🗑</button>
         <button class="btn-icon" onclick="toggleRightPanel()" title="Preview panel" style="border-left:1px solid var(--border);padding-left:0.5rem;margin-left:0.25rem">▶</button>
@@ -507,7 +508,7 @@ function onConfigChange() {
   updateProviderHint(config.provider)
   toggleBaseUrlField(config.provider)
   // Update model placeholder/hint based on provider
-  const hints = { mock:'mock', openai:'gpt-4o, gpt-4o-mini', anthropic:'claude-sonnet-4-20250514', google:'gemini-2.5-flash-lite, gemini-2.5-pro', 'openai-compatible':'model name required (e.g. llama-3.3-70b)' }
+  const hints = { mock:'mock', openai:'gpt-4o, gpt-4o-mini', anthropic:'claude-sonnet-4-20250514', google:'gemini-2.5-flash-lite, gemini-2.5-pro', openrouter:'Browse models via 📋 Browse', 'openai-compatible':'model name required (e.g. llama-3.3-70b)' }
   const modelInput = document.getElementById('model')
   const modelHint = document.getElementById('modelHint')
   if (modelInput) modelInput.placeholder = hints[config.provider] || 'auto'
@@ -526,9 +527,11 @@ function updateProviderHint(provider) {
     openai: 'Requires OPENAI_API_KEY from platform.openai.com',
     anthropic: 'Requires ANTHROPIC_API_KEY from console.anthropic.com',
     google: 'Requires GOOGLE_API_KEY from aistudio.google.com (free tier available)',
-    'openai-compatible': 'Any OpenAI-compatible API. Set API key and base URL. Examples: OpenRouter, llama.cpp, vLLM, Ollama, Together, Groq',
+    openrouter: 'Requires OPENROUTER_API_KEY from openrouter.ai/keys. Browse models via 🤖 button.',
+    'openai-compatible': 'Any OpenAI-compatible API. Set API key and base URL. Examples: llama.cpp, vLLM, Ollama, Together, Groq',
   }
-  document.getElementById('providerHint').textContent = hints[provider] || ''
+  const el = document.getElementById('providerHint')
+  if (el) el.textContent = hints[provider] || ''
 }
 
 // ── Conversations (cookie-backed — survives page reload, no server dependency) ──
@@ -1015,10 +1018,10 @@ function startModalResize(e, dir, modal) {
 }
 
 function openSettingsModal(mode) {
-  const titles = { settings:'Settings', tools:'Tools', keys:'API Keys', inspect:'State Inspector' }
-  const contentMap = { settings: renderSettingsModal, tools: renderToolsModal, keys: renderKeysModal, inspect: renderInspectModal }
-  const widths = { keys: 400 }
-  const resizeEdges = { settings: ['e','s','se'], tools: ['e','s','se'], keys: ['e','s','se'], inspect: ['e','s','se','w','n'] }
+  const titles = { settings:'Settings', tools:'Tools', keys:'API Keys', inspect:'State Inspector', models:'Available Models' }
+  const contentMap = { settings: renderSettingsModal, tools: renderToolsModal, keys: renderKeysModal, inspect: renderInspectModal, models: renderModelsModal }
+  const widths = { keys: 400, models: 500 }
+  const resizeEdges = { settings: ['e','s','se'], tools: ['e','s','se'], keys: ['e','s','se'], inspect: ['e','s','se','w','n'], models: ['e','s','se'] }
 
   openModal({
     title: titles[mode] || 'Settings',
@@ -1029,20 +1032,68 @@ function openSettingsModal(mode) {
 
   if (mode === 'keys') { loadKeyList(); document.querySelector('.modal').style.width = '400px' }
   if (mode === 'tools') loadToolList()
+  if (mode === 'models') loadModelList()
+}
+
+function openModelBrowser() {
+  openSettingsModal('models')
+}
+
+function renderModelsModal() {
+  return '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">' +
+    '<span style="font-size:0.875rem;color:var(--muted)" id="modelCount">Loading models...</span>' +
+    '<button class="btn btn-secondary" onclick="loadModelList()" style="font-size:0.75rem;padding:0.375rem 0.75rem">⟳ Refresh</button></div>' +
+    '<div id="modelList" style="font-size:0.8125rem;color:var(--muted)">Loading...</div>'
+}
+
+async function loadModelList() {
+  const container = document.getElementById('modelList')
+  const count = document.getElementById('modelCount')
+  if (!container) return
+  container.innerHTML = 'Loading...'
+  try {
+    const res = await fetch('/api/models')
+    const data = await res.json()
+    if (!data.models || data.models.length === 0) {
+      container.innerHTML = '<p>No models available. Set an API key first.</p>'
+      if (count) count.textContent = '0 models'
+      return
+    }
+    if (count) count.textContent = data.models.length + ' models · ' + data.provider
+    container.innerHTML = data.models.map(m =>
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0.625rem;border:1px solid var(--border);border-radius:6px;margin-bottom:0.375rem;cursor:pointer" ' +
+      'onclick="selectModel(\'' + escHtml(m) + '\')" title="Click to use this model">' +
+      '<span>' + escHtml(m) + '</span><span style="font-size:0.6875rem;color:var(--muted)">click to select</span></div>'
+    ).join('')
+  } catch (e) {
+    container.innerHTML = '<p style="color:var(--error)">Failed to load models: ' + e.message + '</p>'
+  }
+}
+
+function selectModel(model) {
+  const input = document.getElementById('model')
+  if (input) input.value = model
+  config.model = model
+  saveConfig()
+  showToast('success', 'Model set to: ' + model)
+  closeModal()
 }
 
 function renderSettingsModal() {
   const prov = config.provider || 'mock'
-  const modelHints = { mock:'mock', openai:'gpt-4o, gpt-4o-mini', anthropic:'claude-sonnet-4-20250514', google:'gemini-2.5-flash-lite, gemini-2.5-pro', 'openai-compatible':'model name required (e.g. llama-3.3-70b)' }
+  const modelHints = { mock:'mock', openai:'gpt-4o, gpt-4o-mini', anthropic:'claude-sonnet-4-20250514', google:'gemini-2.5-flash-lite, gemini-2.5-pro', openrouter:'Browse models via 📋 Browse Models', 'openai-compatible':'model name required (e.g. llama-3.3-70b)' }
   return '<div class="field"><label>LLM Provider</label><select class="sure-auth__input" id="provider" onchange="onConfigChange()">' +
     '<option value="mock"' + (prov==='mock'?' selected':'') + '>Mock</option>' +
     '<option value="openai"' + (prov==='openai'?' selected':'') + '>OpenAI</option>' +
     '<option value="anthropic"' + (prov==='anthropic'?' selected':'') + '>Anthropic</option>' +
     '<option value="google"' + (prov==='google'?' selected':'') + '>Google Gemini</option>' +
-    '<option value="openai-compatible"' + (prov==='openai-compatible'?' selected':'') + '>OpenAI-compatible (OpenRouter, llama.cpp, vLLM)</option></select>' +
+    '<option value="openrouter"' + (prov==='openrouter'?' selected':'') + '>OpenRouter</option>' +
+    '<option value="openai-compatible"' + (prov==='openai-compatible'?' selected':'') + '>OpenAI-compatible (llama.cpp, vLLM)</option></select>' +
     '<div class="hint">Also set your API key in the 🔑 Keys dialog</div></div>' +
-    '<div class="field"><label>Model</label><input class="sure-auth__input" id="model" placeholder="' + (modelHints[prov] || 'auto') + '" onchange="onConfigChange()">' +
-    '<div class="hint" id="modelHint">' + (modelHints[prov] || 'Leave empty for provider default') + '</div></div>' +
+    '<div class="field"><label>Model</label><div style="display:flex;gap:0.5rem">' +
+    '<input class="sure-auth__input" id="model" placeholder="' + (modelHints[prov] || 'auto') + '" onchange="onConfigChange()" style="flex:1">' +
+    (prov==='openrouter' ? '<button class="btn btn-secondary" onclick="openModelBrowser()" style="font-size:0.75rem;padding:0.5rem">📋 Browse</button>' : '') +
+    '</div><div class="hint" id="modelHint">' + (modelHints[prov] || 'Leave empty for provider default') + '</div></div>' +
     '<div class="field"><label>Temperature: <span id="tempValue">' + config.temperature + '</span></label>' +
     '<input type="range" id="temperature" min="0" max="2" step="0.1" value="' + config.temperature + '" oninput="document.getElementById(\'tempValue\').textContent=this.value" onchange="onConfigChange()"></div>' +
     '<div class="field"><label>Theme</label><div style="display:flex;gap:0.5rem">' +
@@ -1064,17 +1115,23 @@ function renderKeysModal() {
     '<option value="google">Google Gemini</option><option value="openrouter">OpenRouter</option>' +
     '<option value="openai-compatible">OpenAI-compatible (llama.cpp, vLLM, ...)</option></select></div>' +
     '<div class="field" id="keyBaseUrlField" style="display:none"><label>Base URL</label>' +
-    '<input class="sure-auth__input" type="text" id="newKeyBaseUrl" placeholder="https://openrouter.ai/api/v1">' +
-    '<div class="hint">Required for OpenAI-compatible providers</div></div>' +
-    '<div class="field"><label>API Key</label><input class="sure-auth__input" type="password" id="newKeyValue" placeholder="sk-..."></div>' +
+    '<input class="sure-auth__input" type="text" id="newKeyBaseUrl" placeholder="https://example.com/v1">' +
+    '<div class="hint">Required for OpenAI-compatible providers. OpenRouter auto-filled.</div></div>' +
+    '<div class="field"><label>API Key</label><input class="sure-auth__input" type="password" id="newKeyValue" placeholder="sk-or-v1-...">' +
+    '<div class="hint">Get your key at openrouter.ai/keys</div></div>' +
     '<button class="sure-auth__btn" onclick="addApiKey()">Save Key</button></div>'
 }
 
 function toggleKeyBaseUrl() {
   const val = document.getElementById('newKeyProvider').value
-  document.getElementById('keyBaseUrlField').style.display = (val === 'openai-compatible') ? 'block' : 'none'
-  // Pre-fill OpenRouter URL
-  if (val === 'openrouter') document.getElementById('newKeyBaseUrl').value = 'https://openrouter.ai/api/v1'
+  const field = document.getElementById('keyBaseUrlField')
+  const input = document.getElementById('newKeyBaseUrl')
+  if (val === 'openai-compatible') {
+    field.style.display = 'block'
+    if (!input.value) input.placeholder = 'http://localhost:8080/v1'
+  } else {
+    field.style.display = 'none'
+  }
 }
 
 function renderInspectModal() {

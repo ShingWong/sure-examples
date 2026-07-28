@@ -134,7 +134,7 @@ if (currentConfig.provider === 'mock') {
 
 // ── sure-gentic integration ──
 import { Agent, BaseSkill, ToolRegistryService } from 'sure-gentic'
-import { LLMProviderFactory, OpenAIProvider, AnthropicProvider, GoogleProvider, OpenAICompatibleProvider, MockProvider } from 'sure-gentic'
+import { LLMProviderFactory, OpenAIProvider, AnthropicProvider, GoogleProvider, OpenAICompatibleProvider, OpenRouterProvider, MockProvider } from 'sure-gentic'
 
 let agent = null
 
@@ -157,6 +157,10 @@ async function getAgent(config) {
     process.env.GOOGLE_API_KEY = config.apiKey
     factory.register(new GoogleProvider(config.apiKey))
     process.env.AI_PROVIDER = 'google'
+  } else if (config.provider === 'openrouter') {
+    process.env.OPENROUTER_API_KEY = config.apiKey
+    factory.register(new OpenRouterProvider(config.apiKey, config.model))
+    process.env.AI_PROVIDER = 'openrouter'
   } else if (config.provider === 'openai-compatible') {
     process.env.OPENAI_API_KEY = config.apiKey
     process.env.VISION_BASE_URL = config.baseUrl
@@ -276,6 +280,20 @@ const server = http.createServer(async (req, res) => {
       Object.assign(panelState, body)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify(panelState))
+      return
+    }
+
+    // GET /api/models — list available models for the current provider
+    if (req.method === 'GET' && pathname === '/api/models') {
+      try {
+        if (!agent) agent = await getAgent(currentConfig)
+        const models = await agent.context.provider.getAvailableModels()
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ models, provider: currentConfig.provider }))
+      } catch (err) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ models: [], provider: currentConfig.provider, error: err.message }))
+      }
       return
     }
 
