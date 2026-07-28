@@ -82,13 +82,13 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
   /* ── Input ── */
-  .input-area { border-top: 1px solid var(--border); background: var(--surface); display:flex; flex-direction:column; }
+  .input-area { border-top: 1px solid var(--border); background: var(--surface); display:flex; flex-direction:column; flex-shrink:0; }
   .input-resize { height:4px; cursor:ns-resize; background:transparent; flex-shrink:0; }
-  .input-resize:hover { background:var(--accent); }
-  .input-row { display: flex; align-items:center; gap:0.5rem; padding:0.75rem 1rem; }
-  .input-row input { flex:1; padding:0.75rem 0; border:none; font-size:0.9375rem; background:transparent; color:var(--text); outline:none; }
-  .input-row input:disabled { opacity:0.5; }
-  .input-row input::placeholder { color:var(--muted); }
+  .input-resize:hover, .input-resize:active { background:var(--accent); }
+  .input-row { display: flex; align-items:flex-end; gap:0.5rem; padding:0.75rem 1rem; }
+  .input-row textarea { flex:1; padding:0.5rem 0; border:none; font-size:0.9375rem; background:transparent; color:var(--text); outline:none; resize:none; font-family:inherit; line-height:1.4; min-height:1.5em; max-height:200px; }
+  .input-row textarea:disabled { opacity:0.5; }
+  .input-row textarea::placeholder { color:var(--muted); }
   .btn { padding: 0.75rem 1.25rem; border: none; border-radius: 8px; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
   .btn:hover { opacity: 0.85; }
   .btn-primary { background: var(--accent); color: #fff; }
@@ -235,7 +235,7 @@
       <div class="input-resize" id="inputResize" onmousedown="startInputResize(event)"></div>
       <div class="input-row">
         <button class="btn-icon" onclick="document.getElementById('fileUpload').click()" title="Upload file" id="uploadBtn">📎</button>
-        <input type="text" id="messageInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter') sendMessage()" autofocus>
+        <textarea id="messageInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }" autofocus rows="1"></textarea>
         <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn">Send</button>
       </div>
       <input type="file" id="fileUpload" style="display:none" onchange="handleFileUpload(event)">
@@ -819,17 +819,15 @@ function saveMessage(role, content) {
   renderConversations()
 }
 
-// ── Input area resize ──
+// ── Messages area resize (input area stays fixed at bottom) ──
 function startInputResize(e) {
   e.preventDefault()
-  const area = document.querySelector('.input-area')
   const msgs = document.getElementById('messages')
   const startY = e.clientY
   const startH = msgs.offsetHeight
-  const minH = 100
   document.body.style.cursor = 'ns-resize'
   function onMove(ev) {
-    msgs.style.height = Math.max(minH, startH + (ev.clientY - startY)) + 'px'
+    msgs.style.height = Math.max(100, startH + (ev.clientY - startY)) + 'px'
     msgs.style.flex = 'none'
   }
   function onUp() { document.body.style.cursor = ''; document.removeEventListener('mousemove', onMove); }
@@ -859,6 +857,14 @@ function handleFileUpload(event) {
   reader.readAsText(file)
   event.target.value = ''
 }
+
+// Auto-resize the textarea as user types
+document.addEventListener('input', (e) => {
+  if (e.target && e.target.id === 'messageInput') {
+    e.target.style.height = 'auto'
+    e.target.style.height = Math.min(e.target.scrollHeight, 200) + 'px'
+  }
+})
 
 async function sendMessage() {
   const input = document.getElementById('messageInput')
