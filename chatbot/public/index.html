@@ -66,17 +66,6 @@
   .message.system { align-self: center; background: transparent; font-style: italic; font-size: 0.8rem; color: var(--muted); }
   .message .timestamp { display: block; font-size: 0.7rem; opacity: 0.6; margin-top: 0.25rem; }
   .message.error { border-left: 3px solid var(--error); }
-  .message code { background:var(--highlight); padding:0.125rem 0.375rem; border-radius:3px; font-size:0.8125rem; }
-  .message pre { background:var(--bg); padding:0.75rem; border-radius:6px; overflow-x:auto; margin:0.5rem 0; }
-  .message pre code { background:transparent; padding:0; }
-  .message table { border-collapse:collapse; width:100%; margin:0.5rem 0; font-size:0.8125rem; }
-  .message table td, .message table th { border:1px solid var(--border); padding:0.375rem 0.5rem; text-align:left; }
-  .message table th { background:var(--highlight); font-weight:600; }
-  .message blockquote { border-left:3px solid var(--accent); margin:0.5rem 0; padding:0.25rem 0.75rem; color:var(--muted); font-style:italic; }
-  .message ul { margin:0.25rem 0; padding-left:1.25rem; }
-  .message ul li { list-style:disc; margin-bottom:0.125rem; }
-  .message h2, .message h3, .message h4 { margin:0.75rem 0 0.25rem; }
-  .message hr { border:none; border-top:1px solid var(--border); margin:0.75rem 0; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
   /* ── Input ── */
@@ -713,7 +702,7 @@ function renderMarkdown(text) {
 function appendMessage(role, content) {
   const container = document.getElementById('messages')
   const el = document.createElement('div')
-  el.className = `message ${role}`
+  el.className = `message sure-markdown ${role}`
   if (content.startsWith('Error:')) el.classList.add('error')
   el.innerHTML = renderMarkdown(content) + `<span class="timestamp">${new Date().toLocaleTimeString()}</span>`
   container.appendChild(el)
