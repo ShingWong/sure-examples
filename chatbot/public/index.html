@@ -819,7 +819,7 @@ function saveMessage(role, content) {
   renderConversations()
 }
 
-// ── Messages area resize (sets grid row 2 to fixed height) ──
+// ── Messages area resize ──
 function startInputResize(e) {
   e.preventDefault()
   const main = document.querySelector('.main')
@@ -828,7 +828,7 @@ function startInputResize(e) {
   document.body.style.cursor = 'ns-resize'
   document.body.style.userSelect = 'none'
   function onMove(ev) {
-    const h = Math.max(80, startH + (startY - ev.clientY))
+    const h = Math.max(80, startH + (ev.clientY - startY))
     main.style.gridTemplateRows = 'auto ' + h + 'px auto auto'
   }
   function onUp() { document.body.style.cursor = ''; document.body.style.userSelect = ''; document.removeEventListener('mousemove', onMove); }
