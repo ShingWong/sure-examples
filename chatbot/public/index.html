@@ -43,7 +43,14 @@
   .conversation-item:hover { background: var(--highlight); }
   .conversation-item.active { background: var(--accent); color: #fff; }
 
-  /* ── Conversation Item ── */
+  /* ── Session list (sure-ui fallback — theme CSS overrides these) ── */
+  .sure-session-item { display:flex; align-items:center; gap:0.25rem; padding:0.375rem 0.5rem; border-radius:6px; cursor:pointer; margin-bottom:1px; font-size:0.8125rem; overflow:hidden; transition:background 0.15s; }
+  .sure-session-item:hover { background:var(--highlight); }
+  .sure-session-item.active { background:var(--accent); color:#fff; }
+  .sure-session-title { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sure-session-actions { display:none; flex-shrink:0; gap:0.125rem; }
+  .sure-session-item:hover .sure-session-actions { display:flex; }
+  .sure-session-actions button { background:none; border:none; cursor:pointer; font-size:0.625rem; padding:0.125rem; opacity:0.6; }
 
   /* ── Chat area ── */
   .chat-header { padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; background: var(--surface); }
@@ -181,7 +188,7 @@
         <button class="btn-icon" onclick="toggleSidebar()" title="Toggle sidebar" style="font-size:0.75rem">◀</button>
       </div>
     </div>
-    <div class="sure-session-list" id="conversationList"></div>
+    <div class="conversation-list sure-session-list" id="conversationList"></div>
     <div style="padding:0 0.5rem 0.5rem">
       <button class="btn btn-secondary" style="width:100%" onclick="toggleRightPanel()">⚙ Settings</button>
     </div>
