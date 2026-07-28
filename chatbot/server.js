@@ -155,8 +155,30 @@ function decryptKey(encoded) {
   return decrypted
 }
 
-// ── Key store (in-memory, encrypted at rest) ──
-const keyStore = {}  // provider → encrypted blob
+// ── Key store (file-backed, encrypted at rest) ──
+import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs'
+import { join, dirname } from 'path'
+
+const KEY_FILE = join(__dirname, '.keys.json')
+let keyStore = {}
+
+function loadKeys() {
+  try {
+    if (existsSync(KEY_FILE)) {
+      keyStore = JSON.parse(readFileSync(KEY_FILE, 'utf-8'))
+      console.log(`[keys] loaded ${Object.keys(keyStore).length} provider keys from disk`)
+    }
+  } catch (e) { console.error('[keys] failed to load:', e.message) }
+}
+
+function saveKeys() {
+  try {
+    mkdirSync(dirname(KEY_FILE), { recursive: true })
+    writeFileSync(KEY_FILE, JSON.stringify(keyStore, null, 2))
+  } catch (e) { console.error('[keys] failed to save:', e.message) }
+}
+
+loadKeys()
 
 function maskKey(key) {
   if (key.length <= 8) return '****'
@@ -397,6 +419,7 @@ const server = http.createServer(async (req, res) => {
       const { provider, key, baseUrl } = body
       if (!provider || !key) { res.writeHead(400); res.end(JSON.stringify({ error: 'provider and key required' })); return }
       keyStore[provider] = { key: encryptKey(key), baseUrl: baseUrl || '' }
+      saveKeys()
       console.log(`[key] ${provider} key ${maskKey(key)} configured${baseUrl ? ' url=' + baseUrl : ''}`)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ provider, status: 'configured', masked: maskKey(key), baseUrl: baseUrl || '' }))
@@ -424,6 +447,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'DELETE' && pathname.startsWith('/api/keys/')) {
       const provider = pathname.slice('/api/keys/'.length)
       delete keyStore[provider]
+      saveKeys()
       res.writeHead(200)
       res.end(JSON.stringify({ ok: true }))
       return
