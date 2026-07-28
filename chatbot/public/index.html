@@ -208,9 +208,7 @@
       </div>
     </div>
     <div class="conversation-list sure-session-list" id="conversationList"></div>
-    <div style="padding:0 0.5rem 0.5rem">
-      <button class="btn btn-secondary" style="width:100%" onclick="toggleRightPanel()">⚙ Settings</button>
-    </div>
+    <div id="sidebarProvider" style="padding:0.375rem 0.5rem;font-size:0.6875rem;color:var(--muted);border-top:1px solid var(--border);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Current provider &amp; model"></div>
   </aside>
   <div class="resize-handle" id="leftResizer" onmousedown="startResize(event, 'left')"></div>
 
@@ -220,14 +218,18 @@
       <div style="display:flex;align-items:center;gap:0.5rem">
         <h2 id="chatTitle">sure-chatbot</h2>
       </div>
-      <div style="display:flex;align-items:center;gap:0.25rem">
-        <button class="btn-icon" onclick="openSettingsModal('settings')" title="Settings">⚙</button>
-        <button class="btn-icon" onclick="openSettingsModal('keys')" title="API Keys">🔑</button>
-        <button class="btn-icon" onclick="openSettingsModal('models')" title="Models">🤖</button>
-        <button class="btn-icon" onclick="openSettingsModal('inspect')" title="Inspect">📋</button>
-        <button class="btn-icon" onclick="openSettingsModal('about')" title="About">ℹ</button>
-        <button class="btn-icon" onclick="clearMessages()" title="Clear messages">🗑</button>
-        <button class="btn-icon" onclick="toggleRightPanel()" title="Preview panel" style="border-left:1px solid var(--border);padding-left:0.5rem;margin-left:0.25rem">▶</button>
+      <div class="sure-menu">
+        <button class="sure-menu__item" onclick="logout()" title="Logout">🚪</button>
+        <button class="sure-menu__item" onclick="openSettingsModal('about')" title="Help / About">❓</button>
+        <div class="sure-menu__divider"></div>
+        <button class="sure-menu__item" onclick="openSettingsModal('theme')" title="Theme">🎨</button>
+        <button class="sure-menu__item" onclick="openSettingsModal('models')" title="Models">🤖</button>
+        <button class="sure-menu__item" onclick="openSettingsModal('settings')" title="Provider / Model / Temperature">⚙</button>
+        <button class="sure-menu__item" onclick="openSettingsModal('keys')" title="API Keys">🔑</button>
+        <div class="sure-menu__divider"></div>
+        <button class="sure-menu__item" onclick="openSettingsModal('inspect')" title="Inspect">📋</button>
+        <button class="sure-menu__item" onclick="clearMessages()" title="Clear">🗑</button>
+        <button class="sure-menu__item" onclick="toggleRightPanel()" title="Preview panel" style="border-left:1px solid var(--border);padding-left:0.5rem;margin-left:0.25rem">▶</button>
       </div>
     </div>
     <div class="msgs-wrap"><div class="messages" id="messages"></div></div>
@@ -497,6 +499,7 @@ async function saveConfig() {
     })
     if (!res.ok) throw new Error('Save failed')
   } catch (e) { showToast('error', 'Failed to save config') }
+  updateSidebarProvider()
 }
 
 function onConfigChange() {
@@ -957,6 +960,26 @@ function escHtml(str) {
 // ── Auth ──
 let currentIdentity = null
 
+function updateSidebarProvider() {
+  const el = document.getElementById('sidebarProvider')
+  if (!el) return
+  const prov = config.provider || 'mock'
+  const names = { mock:'Mock', openai:'OpenAI', anthropic:'Anthropic', google:'AI Studio', 'google-vertex':'Vertex AI', openrouter:'OpenRouter', 'openai-compatible':'OpenAI-compat' }
+  const pname = names[prov] || prov
+  const model = config.model || 'default'
+  el.textContent = pname + ' · ' + model
+  el.title = 'Provider: ' + pname + '\nModel: ' + model
+}
+
+async function logout() {
+  await fetch('/api/auth/logout', { method: 'POST' })
+  document.getElementById('authPage').classList.remove('hidden')
+  document.getElementById('messages').innerHTML = ''
+  conversations = []
+  messagesCache = {}
+  currentIdentity = null
+}
+
 async function checkSession() {
   try {
     const res = await fetch('/api/auth/session')
@@ -1208,8 +1231,8 @@ function startModalResize(e, dir, modal) {
 }
 
 function openSettingsModal(mode) {
-  const titles = { settings:'Settings', tools:'Tools', keys:'API Keys', inspect:'State Inspector', models:'Available Models', about:'About sure-chatbot' }
-  const contentMap = { settings: renderSettingsModal, tools: renderToolsModal, keys: renderKeysModal, inspect: renderInspectModal, models: renderModelsModal, about: renderAboutModal }
+  const titles = { settings:'Settings', tools:'Tools', keys:'API Keys', inspect:'State Inspector', models:'Available Models', about:'Help & About', theme:'Theme' }
+  const contentMap = { settings: renderSettingsModal, tools: renderToolsModal, keys: renderKeysModal, inspect: renderInspectModal, models: renderModelsModal, about: renderAboutModal, theme: renderThemeModal }
   const widths = { keys: 400, models: 500 }
   const resizeEdges = { settings: ['e','s','se'], tools: ['e','s','se'], keys: ['e','s','se'], inspect: ['e','s','se','w','n'], models: ['e','s','se'] }
 
@@ -1359,6 +1382,15 @@ function renderInspectModal() {
     '<button class="btn btn-secondary" style="flex:1;font-size:0.75rem;padding:0.375rem" onclick="inspectConfig()">Config</button>' +
     '<button class="btn btn-secondary" style="flex:1;font-size:0.75rem;padding:0.375rem" onclick="inspectPanel()">Panel</button></div>' +
     '<pre id="inspectOutput" style="background:var(--bg);padding:0.75rem;border-radius:6px;font-size:0.75rem;white-space:pre-wrap;overflow-x:auto;max-height:50vh"></pre>'
+}
+
+function renderThemeModal() {
+  const theme = config.theme || 'nord'
+  return '<div style="display:flex;flex-direction:column;gap:0.75rem">' +
+    '<div class="theme-btn' + (theme==='nord'?' active':'') + '" data-theme="nord" onclick="setTheme(\'nord\',this)"><span class="theme-swatch nord"></span> Nord — Light cool</div>' +
+    '<div class="theme-btn' + (theme==='forest'?' active':'') + '" data-theme="forest" onclick="setTheme(\'forest\',this)"><span class="theme-swatch forest"></span> Forest — Warm cream</div>' +
+    '<div class="theme-btn' + (theme==='dracula'?' active':'') + '" data-theme="dracula" onclick="setTheme(\'dracula\',this)"><span class="theme-swatch dracula"></span> Dracula — Purple dark</div>' +
+    '<div class="theme-btn' + (theme==='dark'?' active':'') + '" data-theme="dark" onclick="setTheme(\'dark\',this)"><span class="theme-swatch dark"></span> Dark — Neutral dark</div></div>'
 }
 
 function renderAboutModal() {
