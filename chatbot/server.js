@@ -335,9 +335,11 @@ const server = http.createServer(async (req, res) => {
         const prov = currentConfig.provider
         if (prov === 'openrouter' && keyStore['openrouter']) {
           const key = decryptKey(keyStore['openrouter'].key)
+          const ac = new AbortController()
+          const to = setTimeout(() => ac.abort(), 20000)
           const res = await fetch('https://openrouter.ai/api/v1/models', {
-            headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(10000),
-          })
+            headers: { Authorization: `Bearer ${key}` }, signal: ac.signal,
+          }).finally(() => clearTimeout(to))
           if (res.ok) {
             const data = await res.json()
             models = (data.data || []).filter((m) => m.architecture?.modality === 'text').map((m) => m.id).sort()
