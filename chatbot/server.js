@@ -95,9 +95,14 @@ async function verifyProviderKey(provider, key, baseUrl) {
       cleanup(); if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
       return 'Connected: API key is valid'
     } else if (provider === 'openrouter') {
-      const res = await fetch('https://openrouter.ai/api/v1/models', { ...fetchOpts, headers: { Authorization: `Bearer ${key}` } })
-      cleanup(); if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
-      return 'Connected: OpenRouter API key is valid'
+      const orHeaders = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://persona-bot.local', 'X-Title': 'Persona Bot' }
+      const res = await fetch('https://openrouter.ai/api/v1/auth/key', { ...fetchOpts, headers: orHeaders })
+      cleanup()
+      if (res.status === 401) throw new Error('Key rejected by OpenRouter — check your key at https://openrouter.ai/keys')
+      if (!res.ok) throw new Error(`OpenRouter auth failed: ${res.status}`)
+      const data = await res.json().catch(() => ({}))
+      const remaining = data.data?.credits ? ` (${data.data.credits} credits remaining)` : ''
+      return 'OpenRouter key valid' + remaining
     } else if (provider === 'openai-compatible') {
       const url = (baseUrl || 'http://localhost:8080/v1').replace(/\/+$/, '') + '/models'
       const res = await fetch(url, { ...fetchOpts, headers: { Authorization: `Bearer ${key}` } })
