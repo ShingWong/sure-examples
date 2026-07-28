@@ -82,11 +82,13 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
   /* ── Input ── */
-  .input-area { padding: 1rem 1.5rem; border-top: 1px solid var(--border); background: var(--surface); }
-  .input-row { display: flex; gap: 0.5rem; }
-  .input-row input { flex: 1; padding: 0.75rem 1rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.9375rem; background: var(--bg); color: var(--text); outline: none; }
-  .input-row input:focus { border-color: var(--accent); }
-  .input-row input:disabled { opacity: 0.5; }
+  .input-area { border-top: 1px solid var(--border); background: var(--surface); display:flex; flex-direction:column; }
+  .input-resize { height:4px; cursor:ns-resize; background:transparent; flex-shrink:0; }
+  .input-resize:hover { background:var(--accent); }
+  .input-row { display: flex; align-items:center; gap:0.5rem; padding:0.75rem 1rem; }
+  .input-row input { flex:1; padding:0.75rem 0; border:none; font-size:0.9375rem; background:transparent; color:var(--text); outline:none; }
+  .input-row input:disabled { opacity:0.5; }
+  .input-row input::placeholder { color:var(--muted); }
   .btn { padding: 0.75rem 1.25rem; border: none; border-radius: 8px; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: opacity 0.15s; }
   .btn:hover { opacity: 0.85; }
   .btn-primary { background: var(--accent); color: #fff; }
@@ -230,10 +232,13 @@
     </div>
     <div class="messages" id="messages"></div>
     <div class="input-area">
+      <div class="input-resize" id="inputResize" onmousedown="startInputResize(event)"></div>
       <div class="input-row">
+        <button class="btn-icon" onclick="document.getElementById('fileUpload').click()" title="Upload file" id="uploadBtn">📎</button>
         <input type="text" id="messageInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter') sendMessage()" autofocus>
         <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn">Send</button>
       </div>
+      <input type="file" id="fileUpload" style="display:none" onchange="handleFileUpload(event)">
     </div>
     <div class="status">
       <span class="status-dot" id="statusDot"></span>
@@ -812,6 +817,47 @@ function saveMessage(role, content) {
   }
   saveConversations()
   renderConversations()
+}
+
+// ── Input area resize ──
+function startInputResize(e) {
+  e.preventDefault()
+  const area = document.querySelector('.input-area')
+  const msgs = document.getElementById('messages')
+  const startY = e.clientY
+  const startH = msgs.offsetHeight
+  const minH = 100
+  document.body.style.cursor = 'ns-resize'
+  function onMove(ev) {
+    msgs.style.height = Math.max(minH, startH + (ev.clientY - startY)) + 'px'
+    msgs.style.flex = 'none'
+  }
+  function onUp() { document.body.style.cursor = ''; document.removeEventListener('mousemove', onMove); }
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp, { once: true })
+}
+
+// ── File upload ──
+function handleFileUpload(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const text = e.target?.result
+    if (typeof text === 'string') {
+      // For text files, insert content into input
+      if (file.type.startsWith('text/') || file.name.endsWith('.md') || file.name.endsWith('.txt') || file.name.endsWith('.json') || file.name.endsWith('.js') || file.name.endsWith('.ts') || file.name.endsWith('.py')) {
+        document.getElementById('messageInput').value = 'File: ' + file.name + '\n```\n' + text.substring(0, 4000) + '\n```'
+        showToast('info', 'File loaded: ' + file.name)
+      } else {
+        // Binary files — just note the filename
+        document.getElementById('messageInput').value = '[Attached: ' + file.name + ' (' + (file.size / 1024).toFixed(1) + ' KB)]'
+        showToast('info', 'File attached: ' + file.name)
+      }
+    }
+  }
+  reader.readAsText(file)
+  event.target.value = ''
 }
 
 async function sendMessage() {
