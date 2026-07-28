@@ -1231,8 +1231,11 @@ async function loadKeyList() {
     }
     container.innerHTML = data.providers.map(p => `
       <div style="display:flex;justify-content:space-between;align-items:center;padding:0.5rem 0;border-bottom:1px solid var(--border)">
-        <div><strong>${p.provider}</strong><br><span style="font-size:0.75rem;color:var(--muted)">${p.masked}</span></div>
-        <button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteKey('${p.provider}')">Remove</button>
+        <div><strong>${p.provider}</strong><br><span style="font-size:0.75rem;color:var(--muted)">${p.masked}${p.baseUrl ? ' · ' + p.baseUrl : ''}</span></div>
+        <div style="display:flex;gap:0.375rem">
+          <button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="verifyStoredKey('${p.provider}')">Verify</button>
+          <button class="btn btn-secondary" style="padding:0.25rem 0.5rem;font-size:0.75rem" onclick="deleteKey('${p.provider}')">Remove</button>
+        </div>
       </div>
     `).join('')
   } catch (e) { console.error('Failed to load keys:', e) }
@@ -1243,13 +1246,35 @@ async function addApiKey() {
   const key = document.getElementById('newKeyValue').value.trim()
   const baseUrl = document.getElementById('newKeyBaseUrl')?.value.trim() || ''
   if (!key) { showToast('error', 'Key is required'); return }
+  const btn = document.querySelector('#modalBody .sure-auth__btn')
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving...' }
   try {
     const res = await fetch('/api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, key, baseUrl }) })
     if (!res.ok) throw new Error((await res.json()).error)
+    // Verify the key after saving
+    const verifyRes = await fetch('/api/keys/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider, key, baseUrl }) })
+    const verifyData = await verifyRes.json()
     document.getElementById('newKeyValue').value = ''
-    showToast('success', `${provider} key saved`)
+    if (verifyData.ok) {
+      showToast('success', `${provider} key verified: ${verifyData.detail || 'OK'}`)
+    } else {
+      showToast('error', `Key saved but verification failed: ${verifyData.error || 'Unknown error'}`)
+    }
     loadKeyList()
   } catch (e) { showToast('error', e.message) }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Save Key' } }
+}
+
+async function verifyStoredKey(provider) {
+  try {
+    const res = await fetch(`/api/keys/${provider}/verify`, { method: 'POST' })
+    const data = await res.json()
+    if (data.ok) {
+      showToast('success', `${provider}: ${data.detail || 'Key is valid'}`)
+    } else {
+      showToast('error', `${provider}: ${data.error || 'Verification failed'}`)
+    }
+  } catch (e) { showToast('error', `Verify failed: ${e.message}`) }
 }
 
 async function deleteKey(provider) {

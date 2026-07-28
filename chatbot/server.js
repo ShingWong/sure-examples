@@ -73,6 +73,45 @@ function serveStatic(res, filePath) {
   })
 }
 
+// ── Key verification helper (fetch-only, no SDK imports) ──
+async function verifyProviderKey(provider, key, baseUrl) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10000)
+  const fetchOpts = { signal: controller.signal }
+  const cleanup = () => clearTimeout(timeout)
+
+  try {
+    if (provider === 'openai') {
+      const res = await fetch('https://api.openai.com/v1/models', { ...fetchOpts, headers: { Authorization: `Bearer ${key}` } })
+      cleanup(); if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      const data = await res.json()
+      return `Connected: ${data.data?.length || 0} models available`
+    } else if (provider === 'anthropic') {
+      const res = await fetch('https://api.anthropic.com/v1/messages', { ...fetchOpts, method: 'POST', headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }) })
+      cleanup(); if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      return 'Connected: API key is valid'
+    } else if (provider === 'google') {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1/models?key=${key}`, fetchOpts)
+      cleanup(); if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      return 'Connected: API key is valid'
+    } else if (provider === 'openrouter') {
+      const res = await fetch('https://openrouter.ai/api/v1/models', { ...fetchOpts, headers: { Authorization: `Bearer ${key}` } })
+      cleanup(); if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      return 'Connected: OpenRouter API key is valid'
+    } else if (provider === 'openai-compatible') {
+      const url = (baseUrl || 'http://localhost:8080/v1').replace(/\/+$/, '') + '/models'
+      const res = await fetch(url, { ...fetchOpts, headers: { Authorization: `Bearer ${key}` } })
+      cleanup(); if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      return `Connected: ${baseUrl || 'local'} endpoint`
+    }
+    cleanup()
+    return 'No verification needed'
+  } catch (err) {
+    cleanup()
+    throw err
+  }
+}
+
 // ── Server state ──
 let conversations = []
 let messageIdCounter = 0
@@ -297,6 +336,22 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
+    // POST /api/keys/verify — test an API key by making a lightweight call
+    if (req.method === 'POST' && pathname === '/api/keys/verify') {
+      const body = await parseBody(req)
+      const { provider, key, baseUrl } = body
+      try {
+        let result = await verifyProviderKey(provider, key, baseUrl)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: true, provider, detail: result }))
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ ok: false, provider, error: msg }))
+      }
+      return
+    }
+
     // GET /api/tools — list registered tools from ToolRegistryService
     if (req.method === 'GET' && pathname === '/api/tools') {
       const registry = ToolRegistryService.getInstance()
@@ -333,6 +388,23 @@ const server = http.createServer(async (req, res) => {
       console.log(`[key] ${provider} key ${maskKey(key)} configured${baseUrl ? ' url=' + baseUrl : ''}`)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ provider, status: 'configured', masked: maskKey(key), baseUrl: baseUrl || '' }))
+      return
+    }
+
+    // POST /api/keys/:provider/verify — verify a stored key
+    if (req.method === 'POST' && pathname.match(/^\/api\/keys\/[^\/]+\/verify$/)) {
+      const provider = pathname.split('/')[3]
+      const data = keyStore[provider]
+      if (!data) { res.writeHead(404); res.end(JSON.stringify({ ok: false, error: 'Key not found' })); return }
+      try {
+        const key = decryptKey(data.key)
+        const detail = await verifyProviderKey(provider, key, data.baseUrl || '')
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ provider, ok: true, detail }))
+      } catch (err) {
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ provider, ok: false, error: err instanceof Error ? err.message : String(err) }))
+      }
       return
     }
 
