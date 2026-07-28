@@ -513,7 +513,7 @@ function onConfigChange() {
   updateProviderHint(config.provider)
   toggleBaseUrlField(config.provider)
   // Update model placeholder/hint based on provider
-  const hints = { mock:'mock', openai:'gpt-4o, gpt-4o-mini', anthropic:'claude-sonnet-4-20250514', google:'gemini-2.5-flash-lite, gemini-2.5-pro', openrouter:'Browse models via 📋 Browse', 'openai-compatible':'model name required (e.g. llama-3.3-70b)' }
+  const hints = { mock:'mock', openai:'gpt-4o, gpt-4o-mini', anthropic:'claude-sonnet-4-20250514', google:'gemini-2.5-flash-lite, gemini-2.5-pro', 'google-vertex':'gemini-2.5-flash-lite, gemini-2.5-pro', openrouter:'Browse models via 📋 Browse', 'openai-compatible':'model name required (e.g. llama-3.3-70b)' }
   const modelInput = document.getElementById('model')
   const modelHint = document.getElementById('modelHint')
   if (modelInput) modelInput.placeholder = hints[config.provider] || 'auto'
@@ -532,6 +532,7 @@ function updateProviderHint(provider) {
     openai: 'Requires OPENAI_API_KEY from platform.openai.com',
     anthropic: 'Requires ANTHROPIC_API_KEY from console.anthropic.com',
     google: 'Requires GOOGLE_API_KEY from aistudio.google.com (free tier available)',
+    'google-vertex': 'Requires GOOGLE_VERTEX_PROJECT from console.cloud.google.com',
     openrouter: 'Requires OPENROUTER_API_KEY from openrouter.ai/keys. Browse models via 🤖 button.',
     'openai-compatible': 'Any OpenAI-compatible API. Set API key and base URL. Examples: llama.cpp, vLLM, Ollama, Together, Groq',
   }
@@ -1298,12 +1299,13 @@ function selectModel(model) {
 
 function renderSettingsModal() {
   const prov = config.provider || 'mock'
-  const modelHints = { mock:'mock', openai:'gpt-4o, gpt-4o-mini', anthropic:'claude-sonnet-4-20250514', google:'gemini-2.5-flash-lite, gemini-2.5-pro', openrouter:'Browse models via 📋 Browse Models', 'openai-compatible':'model name required (e.g. llama-3.3-70b)' }
+  const modelHints = { mock:'mock', openai:'gpt-4o, gpt-4o-mini', anthropic:'claude-sonnet-4-20250514', google:'gemini-2.5-flash-lite, gemini-2.5-pro', 'google-vertex':'gemini-2.5-flash-lite, gemini-2.5-pro', openrouter:'Browse models via 📋 Browse Models', 'openai-compatible':'model name required (e.g. llama-3.3-70b)' }
   return '<div class="field"><label>LLM Provider</label><select class="sure-auth__input" id="provider" onchange="onConfigChange()">' +
     '<option value="mock"' + (prov==='mock'?' selected':'') + '>Mock</option>' +
     '<option value="openai"' + (prov==='openai'?' selected':'') + '>OpenAI</option>' +
     '<option value="anthropic"' + (prov==='anthropic'?' selected':'') + '>Anthropic</option>' +
-    '<option value="google"' + (prov==='google'?' selected':'') + '>Google Gemini</option>' +
+    '<option value="google"' + (prov==='google'?' selected':'') + '>Google AI Studio</option>' +
+    '<option value="google-vertex"' + (prov==='google-vertex'?' selected':'') + '>Google Vertex AI</option>' +
     '<option value="openrouter"' + (prov==='openrouter'?' selected':'') + '>OpenRouter</option>' +
     '<option value="openai-compatible"' + (prov==='openai-compatible'?' selected':'') + '>OpenAI-compatible (llama.cpp, vLLM)</option></select>' +
     '<div class="hint">Also set your API key in the 🔑 Keys dialog</div></div>' +
@@ -1329,7 +1331,7 @@ function renderKeysModal() {
     '<div style="border-top:1px solid var(--border);padding-top:1rem">' +
     '<div class="field"><label>Provider</label><select class="sure-auth__input" id="newKeyProvider" onchange="toggleKeyBaseUrl()">' +
     '<option value="openai">OpenAI</option><option value="anthropic">Anthropic</option>' +
-    '<option value="google">Google Gemini</option><option value="openrouter">OpenRouter</option>' +
+    '<option value="google">Google AI Studio</option>+'<option value="google-vertex">Google Vertex AI</option><option value="openrouter">OpenRouter</option>' +
     '<option value="openai-compatible">OpenAI-compatible (llama.cpp, vLLM, ...)</option></select></div>' +
     '<div class="field" id="keyBaseUrlField" style="display:none"><label>Base URL</label>' +
     '<input class="sure-auth__input" type="text" id="newKeyBaseUrl" placeholder="https://example.com/v1">' +

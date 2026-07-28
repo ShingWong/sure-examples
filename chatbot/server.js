@@ -200,7 +200,7 @@ if (currentConfig.provider === 'mock') {
 
 // ── sure-gentic integration ──
 import { Agent, BaseSkill, ToolRegistryService } from 'sure-gentic'
-import { LLMProviderFactory, OpenAIProvider, AnthropicProvider, GoogleProvider, OpenAICompatibleProvider, OpenRouterProvider, MockProvider } from 'sure-gentic'
+import { LLMProviderFactory, OpenAIProvider, AnthropicProvider, GoogleAIStudioProvider, GoogleVertexProvider, OpenAICompatibleProvider, OpenRouterProvider, MockProvider } from 'sure-gentic'
 
 let agent = null
 
@@ -225,8 +225,13 @@ async function getAgent(config) {
   } else if (config.provider === 'google') {
     const key = keyFor('google')
     process.env.GOOGLE_API_KEY = key
-    factory.register(new GoogleProvider(key))
+    factory.register(new GoogleAIStudioProvider(key))
     process.env.AI_PROVIDER = 'google'
+  } else if (config.provider === 'google-vertex') {
+    const key = keyFor('google-vertex')
+    process.env.GOOGLE_VERTEX_PROJECT = key
+    factory.register(new GoogleVertexProvider(key))
+    process.env.AI_PROVIDER = 'google-vertex'
   } else if (config.provider === 'openrouter') {
     const key = keyFor('openrouter')
     process.env.OPENROUTER_API_KEY = key
