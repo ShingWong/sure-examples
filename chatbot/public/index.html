@@ -824,14 +824,15 @@ function startInputResize(e) {
   e.preventDefault()
   const msgs = document.getElementById('messages')
   const startY = e.clientY
-  const startH = msgs.getBoundingClientRect().height
+  const startH = msgs.offsetHeight
   document.body.style.cursor = 'ns-resize'
   document.body.style.userSelect = 'none'
+  msgs.style.flex = 'none'
+  msgs.style.height = startH + 'px'
   function onMove(ev) {
-    msgs.style.flex = 'none'
-    msgs.style.height = (startH - ev.clientY + startY) + 'px'
+    msgs.style.height = Math.max(80, startH + (startY - ev.clientY)) + 'px'
   }
-  function onUp() { document.body.style.cursor = ''; document.body.style.userSelect = ''; document.removeEventListener('mousemove', onMove); }
+  function onUp() { document.body.style.cursor = ''; document.body.style.userSelect = ''; msgs.style.flex = ''; document.removeEventListener('mousemove', onMove); }
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp, { once: true })
 }
