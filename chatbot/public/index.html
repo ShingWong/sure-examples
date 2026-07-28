@@ -819,17 +819,17 @@ function saveMessage(role, content) {
   renderConversations()
 }
 
-// ── Messages area resize (CSS Grid: row 2 gets explicit height) ──
+// ── Messages area resize (sets grid row 2 to fixed height) ──
 function startInputResize(e) {
   e.preventDefault()
-  const msgs = document.getElementById('messages')
+  const main = document.querySelector('.main')
   const startY = e.clientY
-  const startH = msgs.offsetHeight
+  const startH = document.getElementById('messages').offsetHeight
   document.body.style.cursor = 'ns-resize'
   document.body.style.userSelect = 'none'
   function onMove(ev) {
     const h = Math.max(80, startH + (startY - ev.clientY))
-    msgs.style.height = h + 'px'
+    main.style.gridTemplateRows = 'auto ' + h + 'px auto auto'
   }
   function onUp() { document.body.style.cursor = ''; document.body.style.userSelect = ''; document.removeEventListener('mousemove', onMove); }
   document.addEventListener('mousemove', onMove)
