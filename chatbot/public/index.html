@@ -34,7 +34,7 @@
   .sure-auth__help { display:block; margin-top:0.25rem; font-size:0.8rem; color:var(--muted); }
 
   /* ── Layout ── */
-  .app { display: flex; height: 100vh; }
+  .app { display: flex; height: 100vh; overflow:hidden; }
   .sidebar { width: 260px; border-right: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); flex-shrink: 0; transition: width 0.3s; overflow:hidden; }
   .sidebar.collapsed { width: 48px; }
   .sidebar.collapsed .sidebar-header h1,
@@ -46,7 +46,7 @@
   .sidebar.collapsed + .resize-handle { display: none; }
   .resize-handle { width: 4px; cursor: col-resize; flex-shrink: 0; background: transparent; transition: background 0.15s; position:relative; z-index:10; }
   .resize-handle:hover, .resize-handle:active { background: var(--accent); }
-  .main { flex:1; display:grid; grid-template-rows:auto 1fr auto auto; min-width:0; }
+  .main { flex:1; display:flex; flex-direction:column; min-width:0; }
   .right-panel { width: 380px; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); flex-shrink: 0; transition: width 0.3s; overflow:hidden; }
   .right-panel.collapsed { width: 0; border-left: none; }
   .right-panel.collapsed .preview-panel__header,
@@ -70,9 +70,11 @@
   .sure-session-actions button { background:none; border:none; cursor:pointer; font-size:0.625rem; padding:0.125rem; opacity:0.6; }
 
   /* ── Chat area ── */
-  .chat-header { grid-row:1; padding:0.75rem 1.5rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface); }
-  .chat-header h2 { font-size: 1rem; font-weight: 600; }
-  .messages { grid-row:2; overflow-y:auto; padding:1.5rem; display:flex; flex-direction:column; gap:1rem; min-height:60px; }
+  .chat-header { padding:0.75rem 1.5rem; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; background:var(--surface); flex-shrink:0; }
+  .chat-header h2 { font-size:1rem; font-weight:600; }
+  .messages { overflow-y:auto; padding:1.5rem; display:flex; flex-direction:column; gap:1rem; flex:1; min-height:60px; }
+  .input-area { border-top:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; flex-shrink:0; }
+  .status { display:flex; align-items:center; gap:0.5rem; font-size:0.75rem; color:var(--muted); padding:0.5rem 1.5rem; border-top:1px solid var(--border); flex-shrink:0; }
   .message { max-width: 75%; padding: 0.75rem 1rem; border-radius: 12px; line-height: 1.5; font-size: 0.9375rem; animation: fadeIn 0.2s; }
   .message.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
   .message.assistant { align-self: flex-start; background: var(--highlight); border-bottom-left-radius: 4px; }
@@ -82,7 +84,6 @@
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
   /* ── Input ── */
-  .input-area { grid-row:3; border-top:1px solid var(--border); background:var(--surface); display:flex; flex-direction:column; }
   .input-resize { height:4px; cursor:ns-resize; background:transparent; flex-shrink:0; }
   .input-resize:hover, .input-resize:active { background:var(--accent); }
   .input-row { display: flex; align-items:flex-end; gap:0.5rem; padding:0.75rem 1rem; }
@@ -123,7 +124,6 @@
   .theme-swatch.dark { background: linear-gradient(90deg, #1a1a2e, #64ffda); }
 
   /* ── Status indicator ── */
-  .status { grid-row:4; display:flex; align-items:center; gap:0.5rem; font-size:0.75rem; color:var(--muted); padding:0.5rem 1.5rem; border-top:1px solid var(--border); }
   .status-dot { width: 8px; height: 8px; border-radius: 50%; }
   .status-dot.connected { background: var(--success); }
   .status-dot.disconnected { background: var(--error); }
@@ -822,15 +822,15 @@ function saveMessage(role, content) {
 // ── Messages area resize ──
 function startInputResize(e) {
   e.preventDefault()
-  const main = document.querySelector('.main')
+  const msgs = document.getElementById('messages')
   const startY = e.clientY
-  const startH = document.getElementById('messages').offsetHeight
-  main.style.gridTemplateRows = 'auto ' + startH + 'px auto auto'
+  const startH = msgs.offsetHeight
   document.body.style.cursor = 'ns-resize'
   document.body.style.userSelect = 'none'
   function onMove(ev) {
     const h = Math.round(Math.max(60, startH + (ev.clientY - startY)))
-    main.style.gridTemplateRows = 'auto ' + h + 'px auto auto'
+    msgs.style.flex = '0 0 ' + h + 'px'
+    msgs.style.minHeight = '0'
   }
   function onUp() { document.body.style.cursor = ''; document.body.style.userSelect = ''; document.removeEventListener('mousemove', onMove); }
   document.addEventListener('mousemove', onMove)
