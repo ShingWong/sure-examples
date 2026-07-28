@@ -181,33 +181,39 @@ async function getAgent(config) {
   const factory = LLMProviderFactory.getInstance()
   factory.clear()
 
+  const keyFor = (p) => config.apiKey || (keyStore[p] ? decryptKey(keyStore[p].key) : '')
   if (config.provider === 'mock' || config.provider === '') {
     process.env.AI_PROVIDER = 'mock'
     factory.register(new MockProvider())
   } else if (config.provider === 'openai') {
-    process.env.OPENAI_API_KEY = config.apiKey
-    factory.register(new OpenAIProvider(config.apiKey))
+    const key = keyFor('openai')
+    process.env.OPENAI_API_KEY = key
+    factory.register(new OpenAIProvider(key))
     process.env.AI_PROVIDER = 'openai'
   } else if (config.provider === 'anthropic') {
-    process.env.ANTHROPIC_API_KEY = config.apiKey
-    factory.register(new AnthropicProvider(config.apiKey))
+    const key = keyFor('anthropic')
+    process.env.ANTHROPIC_API_KEY = key
+    factory.register(new AnthropicProvider(key))
     process.env.AI_PROVIDER = 'anthropic'
   } else if (config.provider === 'google') {
-    process.env.GOOGLE_API_KEY = config.apiKey
-    factory.register(new GoogleProvider(config.apiKey))
+    const key = keyFor('google')
+    process.env.GOOGLE_API_KEY = key
+    factory.register(new GoogleProvider(key))
     process.env.AI_PROVIDER = 'google'
   } else if (config.provider === 'openrouter') {
-    process.env.OPENROUTER_API_KEY = config.apiKey
-    factory.register(new OpenRouterProvider(config.apiKey, config.model))
+    const key = keyFor('openrouter')
+    process.env.OPENROUTER_API_KEY = key
+    factory.register(new OpenRouterProvider(key, config.model))
     process.env.AI_PROVIDER = 'openrouter'
   } else if (config.provider === 'openai-compatible') {
-    process.env.OPENAI_API_KEY = config.apiKey
-    process.env.VISION_BASE_URL = config.baseUrl
+    const key = keyFor('openai-compatible')
+    const data = keyStore['openai-compatible']
+    const baseUrl = config.baseUrl || (data ? data.baseUrl : '') || 'http://localhost:8080/v1'
+    process.env.OPENAI_API_KEY = key
+    process.env.VISION_BASE_URL = baseUrl
     factory.register(new OpenAICompatibleProvider({
-      apiKey: config.apiKey,
-      baseURL: config.baseUrl,
+      apiKey: key, baseURL: baseUrl,
       defaultModel: config.model || 'gpt-4o',
-      label: config.label || 'custom',
     }))
     process.env.AI_PROVIDER = 'openai-compatible'
   }
@@ -325,10 +331,24 @@ const server = http.createServer(async (req, res) => {
     // GET /api/models — list available models for the current provider
     if (req.method === 'GET' && pathname === '/api/models') {
       try {
-        if (!agent) agent = await getAgent(currentConfig)
-        const models = await agent.context.provider.getAvailableModels()
+        let models = []
+        const prov = currentConfig.provider
+        if (prov === 'openrouter' && keyStore['openrouter']) {
+          const key = decryptKey(keyStore['openrouter'].key)
+          const res = await fetch('https://openrouter.ai/api/v1/models', {
+            headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(10000),
+          })
+          if (res.ok) {
+            const data = await res.json()
+            models = (data.data || []).filter((m) => m.architecture?.modality === 'text').map((m) => m.id).sort()
+          }
+        }
+        if (models.length === 0) {
+          const a = await getAgent(currentConfig)
+          try { models = await a.context.provider.getAvailableModels() } catch {}
+        }
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ models, provider: currentConfig.provider }))
+        res.end(JSON.stringify({ models, provider: prov, selected: currentConfig.model || '' }))
       } catch (err) {
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ models: [], provider: currentConfig.provider, error: err.message }))
@@ -532,7 +552,7 @@ const server = http.createServer(async (req, res) => {
 
       // Call LLM via sure-gentic Agent + Skill
       try {
-        if (!agent) agent = await getAgent(currentConfig)
+        agent = await getAgent(currentConfig)
 
         // Content generation detection (SVG, HTML, etc.)
         const lowerMsg = message.toLowerCase()
