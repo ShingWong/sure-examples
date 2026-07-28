@@ -824,13 +824,14 @@ function startInputResize(e) {
   e.preventDefault()
   const msgs = document.getElementById('messages')
   const startY = e.clientY
-  const startH = msgs.offsetHeight
+  const startH = msgs.getBoundingClientRect().height
   document.body.style.cursor = 'ns-resize'
+  document.body.style.userSelect = 'none'
   function onMove(ev) {
-    const h = Math.max(100, startH + (startY - ev.clientY))
-    msgs.style.flex = '0 0 ' + h + 'px'
+    msgs.style.flex = 'none'
+    msgs.style.height = (startH - ev.clientY + startY) + 'px'
   }
-  function onUp() { document.body.style.cursor = ''; document.removeEventListener('mousemove', onMove); }
+  function onUp() { document.body.style.cursor = ''; document.body.style.userSelect = ''; document.removeEventListener('mousemove', onMove); }
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp, { once: true })
 }
