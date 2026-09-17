@@ -615,24 +615,21 @@ const server = http.createServer(async (req, res) => {
           return
         }
 
-        // Using sure-gentic's BaseSkill pattern
-        class ChatSkill extends BaseSkill {
-          name = 'chat'
-          description = 'Respond to user message'
-          async execute(ctx) {
-            return this.callLLM(ctx._agent, ctx.messages)
-          }
-        }
-
-        const skill = new ChatSkill()
-        const result = await agent.run(skill, { messages, _agent: agent.context })
+        // Agentic loop: the model may call registered tools (web_search,
+        // calculator, current_time) via Agent.runToolLoop. Single-shot
+        // ChatSkill retired — the loop subsumes it (no-tool turns behave
+        // identically: one completion, straight answer).
+        const result = await agent.runToolLoop(
+          [{ role: 'system', content: 'You are a helpful assistant.' }, ...messages],
+          { maxRounds: 5 },
+        )
 
         const content = result.success ? result.data : `Error: ${result.error}`
         const reply = addMessage(conversationId, 'assistant', content)
         conv.title = conv.messages[0]?.content?.slice(0, 50) ?? conv.title
 
         res.writeHead(200, { 'Content-Type': 'application/json' })
-        res.end(JSON.stringify({ message: reply }))
+        res.end(JSON.stringify({ message: reply, toolsUsed: result.toolsUsed || [] }))
       } catch (err) {
         bus.emit('error', { message: err.message, kind: 'chat' })
         const reply = addMessage(conversationId, 'assistant', `Error: ${err.message}`)
