@@ -58,6 +58,10 @@ python3 -m venv .venv
 .venv/bin/python tests/run_tests.py    # 21 tests, all pass
 ```
 
+The runner stops stale chatbot servers on port 3001 before starting
+(`tests/chatbot_cleanup.py`), so leftover manual `tsx server.js`
+processes no longer mask the current build.
+
 Open the **Settings** drawer to:
 - Switch to OpenAI or Anthropic (enter your API key)
 - Change the model
