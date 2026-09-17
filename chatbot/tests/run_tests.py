@@ -38,6 +38,10 @@ def main():
     env['PYTHONPATH'] = pythonpath
     env['ALLOW_EVALUATE'] = 'true'
 
+    # Stop stale servers from manual runs before starting the current one
+    from chatbot_cleanup import stop_stale_chatbot_servers
+    stop_stale_chatbot_servers()
+
     # Start the chatbot server
     print('Starting chatbot server...')
     server = subprocess.Popen(
