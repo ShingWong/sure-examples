@@ -75,30 +75,26 @@ Open the **Settings** drawer to:
 The server uses sure-gentic's `Agent` + `BaseSkill` pattern to make LLM calls. The provider is determined by environment variables set dynamically from the UI settings:
 
 ```js
-import { Agent, BaseSkill } from 'sure-gentic'
+import { Agent } from 'sure-gentic'
 
 // The agent auto-discovers the provider from env vars
 const agent = new Agent()
 
-// Skills encapsulate LLM-powered tasks
-class ChatSkill extends BaseSkill {
-  name = 'chat'
-  description = 'Respond to user message'
-  async execute(ctx) {
-    return this.callLLM(this.agent, ctx.messages)
-  }
-}
-
-// Run the skill — provider-agnostic
-const result = await agent.run(new ChatSkill(), { messages })
+// Agentic loop — model may call registered tools (web_search,
+// calculator, current_time); no-tool turns behave like single-shot
+const result = await agent.runToolLoop(
+  [{ role: 'system', content: 'You are a helpful assistant.' }, ...messages],
+  { maxRounds: 5 },
+)
+// → { success: true, data: '...', toolsUsed: ['calculator'] }
 ```
 
 Switching from OpenAI to Anthropic in the UI changes `AI_PROVIDER` and creates a new `Agent` — no code changes, no imports to swap. The same pattern works for testing with the `mock` provider.
 
 **Key sure-gentic concepts demonstrated:**
 - `Agent` — central orchestrator, auto-discovers provider from env
-- `BaseSkill` — encapsulate a task with `name`, `description`, `execute()`
-- `callLLM` — provider-agnostic LLM call
+- `runToolLoop` — bounded agentic loop (tools + `toolsUsed` for citation)
+- `BaseSkill` — encapsulate a task with `name`, `description`, `execute()` (used for content generation)
 - Provider swap via `AI_PROVIDER` env var — no lock-in
 
 ### sure-state — In-Memory Store Pattern

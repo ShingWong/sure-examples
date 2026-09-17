@@ -22,16 +22,38 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const PUBLIC = path.join(__dirname, 'public')
 
-// ── Helper: JSON body parser ──
-function parseBody(req) {
+// ── Helper: JSON body parser (1MB limit — example DoS guard) ──
+function parseBody(req, maxBytes = 1024 * 1024) {
   return new Promise((resolve, reject) => {
     let body = ''
-    req.on('data', c => body += c)
+    let size = 0
+    req.on('data', c => {
+      size += c.length
+      if (size > maxBytes) {
+        reject(new Error('Request body too large'))
+        req.destroy()
+        return
+      }
+      body += c
+    })
     req.on('end', () => {
       try { resolve(JSON.parse(body)) } catch { reject(new Error('Invalid JSON')) }
     })
     req.on('error', reject)
   })
+}
+
+// Example-only SSRF guard for user-supplied baseUrl (local dev needs
+// http://localhost, so we allow http(s) but block cloud metadata +
+// non-http schemes).
+function assertSafeBaseUrl(baseUrl) {
+  if (!baseUrl) return
+  let u
+  try { u = new URL(baseUrl) } catch { throw new Error('Invalid baseUrl') }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('baseUrl must be http(s)')
+  if (u.hostname === '169.254.169.254' || u.hostname === 'metadata.google.internal') {
+    throw new Error('baseUrl host blocked')
+  }
 }
 
 // ── Helper: cookie parser ──
@@ -57,8 +79,8 @@ function serveStatic(res, filePath) {
     '.png': 'image/png',
     '.svg': 'image/svg+xml',
   }
-  const fullPath = path.join(PUBLIC, filePath)
-  if (!fullPath.startsWith(PUBLIC)) {
+  const fullPath = path.normalize(path.join(PUBLIC, filePath))
+  if (!fullPath.startsWith(PUBLIC + path.sep) && fullPath !== PUBLIC) {
     res.writeHead(403); res.end('Forbidden')
     return
   }
@@ -104,6 +126,7 @@ async function verifyProviderKey(provider, key, baseUrl) {
       const remaining = data.data?.credits ? ` (${data.data.credits} credits remaining)` : ''
       return 'OpenRouter key valid' + remaining
     } else if (provider === 'openai-compatible') {
+      assertSafeBaseUrl(baseUrl)
       const url = (baseUrl || 'http://localhost:8080/v1').replace(/\/+$/, '') + '/models'
       const res = await fetch(url, { ...fetchOpts, headers: { Authorization: `Bearer ${key}` } })
       cleanup(); if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
@@ -133,7 +156,13 @@ let currentConfig = {
 }
 
 // ── API Key Encryption ──
-
+// Example-only: set API_KEY_SECRET (>=32 chars) in production. The dev
+// fallback keeps mock mode working locally but must not protect real keys.
+if (!process.env.API_KEY_SECRET) {
+  console.warn('[keys] WARNING: API_KEY_SECRET not set — using insecure dev key (mock/local only)')
+} else if (Buffer.byteLength(process.env.API_KEY_SECRET, 'utf-8') < 32) {
+  throw new Error('API_KEY_SECRET must be at least 32 bytes')
+}
 const ENCRYPTION_KEY = Buffer.from(process.env.API_KEY_SECRET || 'default-dev-key-change-in-production-!!', 'utf-8').slice(0, 32)
 const ALGORITHM = 'aes-256-gcm'
 
@@ -315,7 +344,7 @@ const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`)
   const pathname = url.pathname
 
-  // CORS headers
+  // CORS headers — dev-only wide open for local example UI
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -329,20 +358,25 @@ const server = http.createServer(async (req, res) => {
   try {
     // ── API routes ──
 
-    // GET /api/config — get current config
+    // GET /api/config — get current config (apiKey never leaves the server)
     if (req.method === 'GET' && pathname === '/api/config') {
+      const { apiKey: _key, ...safe } = currentConfig
       res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify(currentConfig))
+      res.end(JSON.stringify({ ...safe, hasKey: !!currentConfig.apiKey }))
       return
     }
 
-    // POST /api/config — update config
+    // POST /api/config — update config (allowlist only; apiKey via /api/keys)
     if (req.method === 'POST' && pathname === '/api/config') {
       const body = await parseBody(req)
-      Object.assign(currentConfig, body)
+      const bad = ['__proto__', 'constructor', 'prototype'].filter(k => Object.prototype.hasOwnProperty.call(body, k))
+      if (bad.length) { res.writeHead(400); res.end(JSON.stringify({ error: 'Forbidden field' })); return }
+      const allow = ['provider', 'model', 'temperature', 'theme', 'baseUrl', 'label']
+      for (const k of allow) if (body[k] !== undefined) currentConfig[k] = body[k]
       agent = await getAgent(currentConfig)
+      const { apiKey: _k, ...safe } = currentConfig
       res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ ok: true, config: currentConfig }))
+      res.end(JSON.stringify({ ok: true, config: { ...safe, hasKey: !!currentConfig.apiKey } }))
       return
     }
 
@@ -382,6 +416,7 @@ const server = http.createServer(async (req, res) => {
       const body = await parseBody(req)
       const { provider, key, baseUrl } = body
       try {
+        assertSafeBaseUrl(baseUrl)
         let result = await verifyProviderKey(provider, key, baseUrl)
         res.writeHead(200, { 'Content-Type': 'application/json' })
         res.end(JSON.stringify({ ok: true, provider, detail: result }))
@@ -409,12 +444,11 @@ const server = http.createServer(async (req, res) => {
 
     // GET /api/keys — list configured providers with masked keys
     if (req.method === 'GET' && pathname === '/api/keys') {
-      const providers = Object.entries(keyStore).map(([provider, data]) => ({
-        provider,
-        status: 'configured',
-        masked: maskKey(decryptKey(data.key)),
-        baseUrl: data.baseUrl || '',
-      }))
+      const providers = Object.entries(keyStore).map(([provider, data]) => {
+        let masked = 'undecryptable'
+        try { masked = maskKey(decryptKey(data.key)) } catch {}
+        return { provider, status: 'configured', masked, baseUrl: data.baseUrl || '' }
+      })
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ providers }))
       return
@@ -425,6 +459,7 @@ const server = http.createServer(async (req, res) => {
       const body = await parseBody(req)
       const { provider, key, baseUrl } = body
       if (!provider || !key) { res.writeHead(400); res.end(JSON.stringify({ error: 'provider and key required' })); return }
+      assertSafeBaseUrl(baseUrl)
       keyStore[provider] = { key: encryptKey(key), baseUrl: baseUrl || '' }
       saveKeys()
       console.log(`[key] ${provider} key ${maskKey(key)} configured${baseUrl ? ' url=' + baseUrl : ''}`)
@@ -567,8 +602,12 @@ const server = http.createServer(async (req, res) => {
       }
 
       // Build LLM messages — convert to ContentPart[] if attachment present
+      // Limits: 5MB data, image/* + pdf/xls/docx allowlist (memory + LLM cost guard)
+      const ALLOWED_MIME = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain']
       function toContentParts(msgText, att) {
         if (att && att.data && att.mime) {
+          if (!ALLOWED_MIME.includes(att.mime) && !att.mime.startsWith('image/')) throw new Error('Attachment type not allowed')
+          if (att.data.length > 5 * 1024 * 1024) throw new Error('Attachment too large (5MB max)')
           const isImage = att.mime.startsWith('image/')
           if (isImage) {
             return [
@@ -602,14 +641,15 @@ const server = http.createServer(async (req, res) => {
       try {
         agent = await getAgent(currentConfig)
 
-        // Content generation detection (SVG, HTML, etc.)
+        // Content generation detection: require an explicit creation verb +
+        // content noun to avoid hijacking normal chat ("what is html?").
         const lowerMsg = message.toLowerCase()
-        if (lowerMsg.includes('svg') || lowerMsg.includes('logo') || lowerMsg.includes('html') || lowerMsg.includes('page') || lowerMsg.includes('quiz')) {
+        const wantsContent = /\b(generate|create|make|build|draw|render)\b.*\b(svg|html|logo|landing-?page|page|quiz)\b/.test(lowerMsg)
+        if (wantsContent) {
           const skill = new GenerateContentSkill()
           const result = await agent.run(skill, { prompt: message, _agent: agent.context })
           const reply = addMessage(conversationId, 'assistant', (result.data || 'Generated').substring(0, 500))
-          // Update panel via API
-          try { await fetch(`http://localhost:${PORT}/api/panel`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(panelState) }) } catch {}
+          // panelState already mutated in-process by the skill — no self-fetch needed
           res.writeHead(200, { 'Content-Type': 'application/json' })
           res.end(JSON.stringify({ message: reply, panelState }))
           return
