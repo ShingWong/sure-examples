@@ -131,6 +131,13 @@ async function verifyProviderKey(provider, key, baseUrl) {
       const res = await fetch(url, { ...fetchOpts, headers: { Authorization: `Bearer ${key}` } })
       cleanup(); if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
       return `Connected: ${baseUrl || 'local'} endpoint`
+    } else if (provider === 'serpapi') {
+      // SerpAPI only takes the key as a URL query param (no header).
+      const res = await fetch(`https://serpapi.com/account.json?api_key=${encodeURIComponent(key)}`, fetchOpts)
+      cleanup(); if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      const data = await res.json().catch(() => ({}))
+      if (data.error) throw new Error(data.error)
+      return 'Connected: SerpAPI key is valid'
     }
     cleanup()
     return 'No verification needed'
@@ -209,6 +216,69 @@ function saveKeys() {
 
 loadKeys()
 
+// ── Tool config (enabled set, persisted server-side) ──
+// Shape: { disabled: [<tool name>, ...] } — default is all enabled.
+const TOOL_FILE = join(__dirname, '.tools.json')
+let disabledTools = new Set()
+
+function loadToolConfig() {
+  try {
+    if (existsSync(TOOL_FILE)) {
+      const data = JSON.parse(readFileSync(TOOL_FILE, 'utf-8'))
+      if (Array.isArray(data.disabled)) {
+        disabledTools = new Set(data.disabled.filter(x => typeof x === 'string'))
+      }
+      console.log(`[tools] ${disabledTools.size} tool(s) disabled from disk`)
+    }
+  } catch (e) { console.error('[tools] failed to load:', e.message) }
+}
+
+function saveToolConfig() {
+  try {
+    writeFileSync(TOOL_FILE, JSON.stringify({ disabled: [...disabledTools] }, null, 2))
+  } catch (e) { console.error('[tools] failed to save:', e.message) }
+}
+
+// Ensure builtins are registered, then apply the persisted enabled set.
+function applyToolConfig() {
+  registerBuiltinTools()
+  const registry = ToolRegistryService.getInstance()
+  for (const t of registry.getAll()) {
+    registry.setToolActive(t.id, !disabledTools.has(t.name) && !disabledTools.has(t.id))
+  }
+}
+
+function enabledToolNames() {
+  applyToolConfig()
+  return ToolRegistryService.getInstance().getActive().map(t => t.name)
+}
+
+// Shape for GET /api/tools and POST /api/tools responses.
+function toolListJson() {
+  applyToolConfig()
+  const searchLive = isSearchConfigured()
+  return ToolRegistryService.getInstance().listTools().map(t => ({
+    name: t.name, description: t.description,
+    parameters: t.parameters?.map(p => ({ name: p.name, type: p.type, required: p.required })) || [],
+    enabled: t.isActive !== false,
+    ...(t.name === 'web_search' ? { live: searchLive } : {}),
+  }))
+}
+
+// Feed the builtin web_search handler from the encrypted keystore
+// (falls back to SEARCH_API_KEY env when no serpapi key is stored).
+function refreshSearchKey() {
+  try {
+    const entry = keyStore['serpapi']
+    configureBuiltinTools({ searchApiKey: entry ? decryptKey(entry.key) : undefined })
+  } catch {
+    configureBuiltinTools()
+  }
+}
+
+loadToolConfig()
+refreshSearchKey()
+
 function maskKey(key) {
   if (key.length <= 8) return '****'
   return key.slice(0, 3) + '...' + key.slice(-4)
@@ -228,7 +298,7 @@ if (currentConfig.provider === 'mock') {
 }
 
 // ── sure-gentic integration ──
-import { Agent, BaseSkill, ToolRegistryService } from 'sure-gentic'
+import { Agent, BaseSkill, ToolRegistryService, registerBuiltinTools, configureBuiltinTools, isSearchConfigured } from 'sure-gentic'
 import { LLMProviderFactory, OpenAIProvider, AnthropicProvider, GoogleAIStudioProvider, GoogleVertexProvider, OpenAICompatibleProvider, OpenRouterProvider, MockProvider } from 'sure-gentic'
 
 let agent = null
@@ -282,7 +352,9 @@ async function getAgent(config) {
   process.env.AI_TEMPERATURE = String(config.temperature)
   const provider = factory.getProvider(process.env.AI_PROVIDER)
   if (!provider) throw new Error('No provider registered for: ' + process.env.AI_PROVIDER)
-  return new Agent(provider)
+  const agent = new Agent(provider)
+  applyToolConfig()
+  return agent
 }
 
 // ── sure-state integration ──
@@ -428,15 +500,32 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
-    // GET /api/tools — list registered tools from ToolRegistryService
+    // GET /api/tools — list registered tools with enabled/live status
     if (req.method === 'GET' && pathname === '/api/tools') {
-      const registry = ToolRegistryService.getInstance()
-      const tools = registry.listTools().map(t => ({
-        name: t.name, description: t.description,
-        parameters: t.parameters?.map(p => ({ name: p.name, type: p.type, required: p.required })) || [],
-      }))
       res.writeHead(200, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ tools }))
+      res.end(JSON.stringify({ tools: toolListJson() }))
+      return
+    }
+
+    // POST /api/tools — enable/disable tools: { enabled: { <name>: bool } }
+    if (req.method === 'POST' && pathname === '/api/tools') {
+      const body = await parseBody(req)
+      const enabled = body.enabled
+      if (!enabled || typeof enabled !== 'object' || Array.isArray(enabled)) {
+        res.writeHead(400); res.end(JSON.stringify({ error: 'enabled map required, e.g. {"enabled":{"web_search":false}}' })); return
+      }
+      applyToolConfig()
+      const registry = ToolRegistryService.getInstance()
+      const bad = Object.keys(enabled).filter(k => !registry.get(k) && !registry.getAll().some(t => t.name === k))
+      if (bad.length) { res.writeHead(400); res.end(JSON.stringify({ error: 'Unknown tool(s): ' + bad.join(', ') })); return }
+      for (const [k, v] of Object.entries(enabled)) {
+        const tool = registry.get(k) ?? registry.getAll().find(t => t.name === k)
+        if (v) disabledTools.delete(tool.name)
+        else disabledTools.add(tool.name)
+      }
+      saveToolConfig()
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ ok: true, tools: toolListJson() }))
       return
     }
 
@@ -462,6 +551,7 @@ const server = http.createServer(async (req, res) => {
       assertSafeBaseUrl(baseUrl)
       keyStore[provider] = { key: encryptKey(key), baseUrl: baseUrl || '' }
       saveKeys()
+      if (provider === 'serpapi') refreshSearchKey()
       console.log(`[key] ${provider} key ${maskKey(key)} configured${baseUrl ? ' url=' + baseUrl : ''}`)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ provider, status: 'configured', masked: maskKey(key), baseUrl: baseUrl || '' }))
@@ -490,6 +580,7 @@ const server = http.createServer(async (req, res) => {
       const provider = pathname.slice('/api/keys/'.length)
       delete keyStore[provider]
       saveKeys()
+      if (provider === 'serpapi') refreshSearchKey()
       res.writeHead(200)
       res.end(JSON.stringify({ ok: true }))
       return
@@ -661,7 +752,7 @@ const server = http.createServer(async (req, res) => {
         // identically: one completion, straight answer).
         const result = await agent.runToolLoop(
           [{ role: 'system', content: 'You are a helpful assistant.' }, ...messages],
-          { maxRounds: 5 },
+          { maxRounds: 5, allowedTools: enabledToolNames() },
         )
 
         const content = result.success ? result.data : `Error: ${result.error}`

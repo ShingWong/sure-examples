@@ -43,7 +43,7 @@
 
 ```bash
 cd sure-examples/chatbot
-npm install
+npm run setup              # install + build the file: linked sure-* deps
 npm start                    # tsx server.js
 # → http://localhost:3001
 
@@ -67,6 +67,15 @@ Open the **Settings** drawer to:
 - Change the model
 - Adjust temperature
 - Switch between Nord, Forest, and Dracula themes
+
+Open the **🔧 Tools** dialog to:
+- Enable/disable tools (`web_search`, `calculator`, `current_time`) — persisted server-side in `.tools.json`
+- See whether `web_search` is live or returning mock results
+
+Tools only fire on OpenAI-compatible providers (`openai`, `openai-compatible`) —
+mock / Anthropic / Google ignore tool schemas. Live web search needs a SerpAPI
+key: add it in the **🔑 Keys** dialog (stored encrypted, verified against
+SerpAPI before saving).
 
 ## How it showcases each project
 
@@ -377,6 +386,27 @@ Send a message and get a response:
 ### `GET /api/theme?name=nord`
 
 Returns raw CSS for the named theme (`nord`, `forest`, `dracula`).
+
+### `GET /api/tools`
+
+Lists registered tools with UI state:
+
+```json
+[{ "name": "web_search", "description": "...", "parameters": [...], "enabled": true, "live": false }]
+```
+
+`live` (only on `web_search`) reports whether a SerpAPI key is configured —
+without one the tool returns mock results.
+
+### `POST /api/tools`
+
+Enable/disable tools (unknown names are rejected):
+
+```json
+{ "enabled": { "web_search": false } }
+
+→ { "ok": true, "tools": [...] }
+```
 
 ## File Structure
 
