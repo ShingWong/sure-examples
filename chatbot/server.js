@@ -90,7 +90,11 @@ function serveStatic(res, filePath) {
       res.end('Not found')
       return
     }
-    res.writeHead(200, { 'Content-Type': mime[ext] || 'application/octet-stream' })
+    // index.html changes on every deploy — never cache it, otherwise users
+    // keep running stale UI (missing buttons, old dialogs) with no error.
+    const headers = { 'Content-Type': mime[ext] || 'application/octet-stream' }
+    if (ext === '.html') headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    res.writeHead(200, headers)
     res.end(data)
   })
 }
@@ -138,6 +142,11 @@ async function verifyProviderKey(provider, key, baseUrl) {
       const data = await res.json().catch(() => ({}))
       if (data.error) throw new Error(data.error)
       return 'Connected: SerpAPI key is valid'
+    } else if (provider === 'exa') {
+      // No key-check endpoint — a 1-result search is the cheapest live check.
+      const res = await fetch('https://api.exa.ai/search', { ...fetchOpts, method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': key }, body: JSON.stringify({ query: 'test', numResults: 1, type: 'auto' }) })
+      cleanup(); if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      return 'Connected: Exa key is valid'
     }
     cleanup()
     return 'No verification needed'
@@ -242,6 +251,7 @@ function saveToolConfig() {
 // Ensure builtins are registered, then apply the persisted enabled set.
 function applyToolConfig() {
   registerBuiltinTools()
+  registerFiresearchTools()
   const registry = ToolRegistryService.getInstance()
   for (const t of registry.getAll()) {
     registry.setToolActive(t.id, !disabledTools.has(t.name) && !disabledTools.has(t.id))
@@ -257,27 +267,46 @@ function enabledToolNames() {
 function toolListJson() {
   applyToolConfig()
   const searchLive = isSearchConfigured()
+  const firesearchLive = isFiresearchConfigured()
   return ToolRegistryService.getInstance().listTools().map(t => ({
     name: t.name, description: t.description,
     parameters: t.parameters?.map(p => ({ name: p.name, type: p.type, required: p.required })) || [],
     enabled: t.isActive !== false,
     ...(t.name === 'web_search' ? { live: searchLive } : {}),
+    ...(t.name === 'firesearch_search' ? { live: firesearchLive } : {}),
   }))
 }
 
 // Feed the builtin web_search handler from the encrypted keystore
-// (falls back to SEARCH_API_KEY env when no serpapi key is stored).
+// (falls back to SEARCH_API_KEY / EXA_API_KEY env when nothing stored).
 function refreshSearchKey() {
   try {
-    const entry = keyStore['serpapi']
-    configureBuiltinTools({ searchApiKey: entry ? decryptKey(entry.key) : undefined })
+    const serp = keyStore['serpapi']
+    const exa = keyStore['exa']
+    configureBuiltinTools({
+      searchApiKey: serp ? decryptKey(serp.key) : undefined,
+      exaApiKey: exa ? decryptKey(exa.key) : undefined,
+    })
   } catch {
     configureBuiltinTools()
   }
 }
 
+// Feed the firesearch_* tools from the encrypted keystore: the stored
+// 'firesearch' key holds the secret API key, baseUrl holds the instance
+// host. Secret key never leaves the server (X-API-Key header only).
+function refreshFiresearch() {
+  try {
+    const entry = keyStore['firesearch']
+    configureFiresearchTools(entry ? { host: entry.baseUrl || undefined, apiKey: decryptKey(entry.key) } : undefined)
+  } catch {
+    configureFiresearchTools()
+  }
+}
+
 loadToolConfig()
 refreshSearchKey()
+refreshFiresearch()
 
 function maskKey(key) {
   if (key.length <= 8) return '****'
@@ -298,7 +327,7 @@ if (currentConfig.provider === 'mock') {
 }
 
 // ── sure-gentic integration ──
-import { Agent, BaseSkill, ToolRegistryService, registerBuiltinTools, configureBuiltinTools, isSearchConfigured } from 'sure-gentic'
+import { Agent, BaseSkill, ToolRegistryService, registerBuiltinTools, configureBuiltinTools, isSearchConfigured, registerFiresearchTools, configureFiresearchTools, isFiresearchConfigured } from 'sure-gentic'
 import { LLMProviderFactory, OpenAIProvider, AnthropicProvider, GoogleAIStudioProvider, GoogleVertexProvider, OpenAICompatibleProvider, OpenRouterProvider, MockProvider } from 'sure-gentic'
 
 let agent = null
@@ -551,7 +580,8 @@ const server = http.createServer(async (req, res) => {
       assertSafeBaseUrl(baseUrl)
       keyStore[provider] = { key: encryptKey(key), baseUrl: baseUrl || '' }
       saveKeys()
-      if (provider === 'serpapi') refreshSearchKey()
+      if (provider === 'serpapi' || provider === 'exa') refreshSearchKey()
+      if (provider === 'firesearch') refreshFiresearch()
       console.log(`[key] ${provider} key ${maskKey(key)} configured${baseUrl ? ' url=' + baseUrl : ''}`)
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ provider, status: 'configured', masked: maskKey(key), baseUrl: baseUrl || '' }))
@@ -580,7 +610,8 @@ const server = http.createServer(async (req, res) => {
       const provider = pathname.slice('/api/keys/'.length)
       delete keyStore[provider]
       saveKeys()
-      if (provider === 'serpapi') refreshSearchKey()
+      if (provider === 'serpapi' || provider === 'exa') refreshSearchKey()
+      if (provider === 'firesearch') refreshFiresearch()
       res.writeHead(200)
       res.end(JSON.stringify({ ok: true }))
       return
@@ -675,7 +706,8 @@ const server = http.createServer(async (req, res) => {
 
     // POST /api/chat — send a message, get a response
     if (req.method === 'POST' && pathname === '/api/chat') {
-      const body = await parseBody(req)
+      // 5MB body cap: message history plus a base64 attachment (~3MB max client-side)
+      const body = await parseBody(req, 5 * 1024 * 1024)
       const { conversationId, message, attachment } = body
 
       if (!conversationId || !message) {
@@ -751,7 +783,7 @@ const server = http.createServer(async (req, res) => {
         // ChatSkill retired — the loop subsumes it (no-tool turns behave
         // identically: one completion, straight answer).
         const result = await agent.runToolLoop(
-          [{ role: 'system', content: 'You are a helpful assistant.' }, ...messages],
+          [{ role: 'system', content: 'You are a helpful assistant. You have tools: web_search (web facts, people, news), calculator (math expressions), current_time (date/time), firesearch_search (own indexes). When the user asks something a tool answers better — a calculation, the time/date, fresh facts — call the tool instead of guessing. Say when you used one.' }, ...messages],
           { maxRounds: 5, allowedTools: enabledToolNames() },
         )
 

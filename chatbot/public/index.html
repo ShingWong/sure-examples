@@ -235,6 +235,7 @@
     <div class="msgs-wrap"><div class="messages" id="messages"></div></div>
     <div class="input-area">
       <div class="input-resize" id="inputResize" onmousedown="startInputResize(event)"></div>
+      <div id="attachPreview" style="display:none;align-items:center;gap:0.5rem;padding:0.375rem 0.625rem;font-size:0.75rem;color:var(--muted)"></div>
       <div class="input-row">
         <button class="btn-icon" onclick="document.getElementById('fileUpload').click()" title="Upload file" id="uploadBtn">📎</button>
         <textarea id="messageInput" placeholder="Type a message..." onkeydown="if(event.key==='Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }" autofocus rows="1"></textarea>
@@ -729,7 +730,7 @@ function renderMarkdown(text) {
   return html
 }
 
-function appendMessage(role, content) {
+function appendMessage(role, content, imageUrl) {
   const container = document.getElementById('messages')
   const el = document.createElement('div')
   el.className = `message sure-markdown ${role}`
@@ -737,6 +738,15 @@ function appendMessage(role, content) {
   const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)
   el.dataset.msgId = msgId
   el.dataset.raw = content
+
+  // Attached image preview (user messages only)
+  if (imageUrl && role === 'user') {
+    const img = document.createElement('img')
+    img.src = imageUrl
+    img.alt = 'attached image'
+    img.style.cssText = 'max-width:100%;max-height:220px;border-radius:8px;margin-bottom:0.5rem;display:block'
+    el.appendChild(img)
+  }
 
   // Render markdown (default on)
   const body = document.createElement('div')
@@ -893,6 +903,13 @@ let pendingAttachment = null  // { mime, data (base64), name }
 function handleFileUpload(event) {
   const file = event.target.files?.[0]
   if (!file) return
+  // Server caps /api/chat bodies at 5MB — base64 inflates ~33%, so refuse
+  // large files up front instead of silently truncating (which corrupts data).
+  if (file.size > 3 * 1024 * 1024) {
+    showToast('error', 'File too large (3MB max)')
+    event.target.value = ''
+    return
+  }
   const reader = new FileReader()
   reader.onload = (e) => {
     const dataUrl = e.target?.result
@@ -901,11 +918,32 @@ function handleFileUpload(event) {
       const input = document.getElementById('messageInput')
       input.value = '📎' + file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)\n'
       input.focus()
+      renderAttachPreview()
       showToast('info', 'Attached: ' + file.name)
     }
   }
   reader.readAsDataURL(file)
   event.target.value = ''
+}
+
+function renderAttachPreview() {
+  const box = document.getElementById('attachPreview')
+  if (!pendingAttachment) { box.style.display = 'none'; box.innerHTML = ''; return }
+  const thumb = pendingAttachment.mime.startsWith('image/')
+    ? '<img src="' + pendingAttachment.data + '" style="max-height:48px;max-width:72px;border-radius:6px;border:1px solid var(--border)">'
+    : '<span style="font-size:1.25rem">📄</span>'
+  box.innerHTML = thumb + '<span>' + escHtml(pendingAttachment.name) + '</span>' +
+    '<button onclick="clearAttachment()" style="background:none;border:none;cursor:pointer;color:var(--muted)" title="Remove attachment">✕</button>'
+  box.style.display = 'flex'
+}
+
+function clearAttachment() {
+  pendingAttachment = null
+  const box = document.getElementById('attachPreview')
+  box.style.display = 'none'
+  box.innerHTML = ''
+  const input = document.getElementById('messageInput')
+  if (input.value.startsWith('📎')) input.value = ''
 }
 
 // Auto-resize the textarea as user types
@@ -928,7 +966,8 @@ async function sendMessage() {
   }
 
   input.value = ''
-  appendMessage('user', text)
+  const sentAttachment = pendingAttachment
+  appendMessage('user', text, sentAttachment && sentAttachment.mime.startsWith('image/') ? sentAttachment.data : undefined)
   isLoading = true
   setStatus('loading', 'Thinking...')
   document.getElementById('sendBtn').disabled = true
@@ -936,9 +975,9 @@ async function sendMessage() {
 
   try {
     const body = { conversationId: activeConversationId, message: text }
-    if (pendingAttachment) {
-      body.attachment = { mime: pendingAttachment.mime, data: pendingAttachment.data.substring(0, 2000000), name: pendingAttachment.name }
-      pendingAttachment = null
+    if (sentAttachment) {
+      body.attachment = { mime: sentAttachment.mime, data: sentAttachment.data, name: sentAttachment.name }
+      clearAttachment()
     }
     const res = await fetch('/api/chat', {
       method: 'POST',
@@ -948,6 +987,9 @@ async function sendMessage() {
     const data = await res.json()
     if (data.message) {
       appendMessage(data.message.role, data.message.content)
+      if (data.toolsUsed && data.toolsUsed.length) {
+        appendMessage('assistant', '🔧 Used: ' + data.toolsUsed.join(', '))
+      }
     }
     if (data.error) {
       showToast('error', data.error)
@@ -1224,9 +1266,11 @@ function openModal(opts) {
   modal.style.height = ''
   modal.style.maxHeight = ''
 
-  // Attach drag
+  // Attach drag (remove the previous open's handler first — otherwise
+  // every openModal stacks another mousedown listener on the header)
   const header = modal.querySelector('.modal__header')
   if (header && draggable) {
+    if (header._dragHandler) header.removeEventListener('mousedown', header._dragHandler)
     header.style.cursor = 'grab'
     header._dragHandler = (e) => {
       if (e.target.closest('.modal__close') || e.target.closest('.modal__resize-handle')) return
@@ -1254,9 +1298,18 @@ function closeModal() {
 function startModalResize(e, dir, modal) {
   e.preventDefault()
   e.stopPropagation()
+  // Freeze the flex-centered box to viewport coords first. Without this the
+  // modal grows symmetrically around its center, so the grabbed edge tracks
+  // the mouse at half rate (and offsetLeft/Top are in offsetParent coords,
+  // not the client coords the mouse reports).
+  const rect = modal.getBoundingClientRect()
+  modal.style.position = 'fixed'
+  modal.style.margin = '0'
+  modal.style.left = rect.left + 'px'
+  modal.style.top = rect.top + 'px'
   const startX = e.clientX, startY = e.clientY
-  const startW = modal.offsetWidth, startH = modal.offsetHeight
-  const startL = modal.offsetLeft, startT = modal.offsetTop
+  const startW = rect.width, startH = rect.height
+  const startL = rect.left, startT = rect.top
   const minW = 320, minH = 200
   const cursors = { e:'ew-resize', s:'ns-resize', se:'nwse-resize', w:'ew-resize', n:'ns-resize', nw:'nwse-resize', ne:'nesw-resize', sw:'nesw-resize' }
   document.body.style.cursor = cursors[dir] || 'nwse-resize'
@@ -1265,8 +1318,8 @@ function startModalResize(e, dir, modal) {
     const dx = ev.clientX - startX, dy = ev.clientY - startY
     if (dir.includes('e')) modal.style.width = Math.max(minW, startW + dx) + 'px'
     if (dir.includes('s')) modal.style.height = Math.max(minH, startH + dy) + 'px'
-    if (dir.includes('w')) { modal.style.width = Math.max(minW, startW - dx) + 'px'; modal.style.left = (startL + dx) + 'px' }
-    if (dir.includes('n')) { modal.style.height = Math.max(minH, startH - dy) + 'px'; modal.style.top = (startT + dy) + 'px' }
+    if (dir.includes('w')) { const w = Math.max(minW, startW - dx); modal.style.width = w + 'px'; modal.style.left = (startL + (startW - w)) + 'px' }
+    if (dir.includes('n')) { const h = Math.max(minH, startH - dy); modal.style.height = h + 'px'; modal.style.top = (startT + (startH - h)) + 'px' }
     modal.style.maxWidth = 'none'; modal.style.maxHeight = 'none'
   }
   function onUp() {
@@ -1403,12 +1456,14 @@ function renderKeysModal() {
     '<option value="openai">OpenAI</option><option value="anthropic">Anthropic</option>' +
     '<option value="google">Google AI Studio</option>' + '<option value="google-vertex">Google Vertex AI</option>' + '<option value="openrouter">OpenRouter</option>' +
     '<option value="openai-compatible">OpenAI-compatible (llama.cpp, vLLM, ...)</option>' +
-    '<option value="serpapi">SerpAPI (live web search)</option></select></div>' +
+    '<option value="serpapi">SerpAPI (live web search)</option>' +
+    '<option value="exa">Exa (live web search)</option>' +
+    '<option value="firesearch">Firesearch (your own search index)</option></select></div>' +
     '<div class="field" id="keyBaseUrlField" style="display:none"><label>Base URL</label>' +
     '<input class="sure-auth__input" type="text" id="newKeyBaseUrl" placeholder="https://example.com/v1">' +
     '<div class="hint">Required for OpenAI-compatible providers. OpenRouter auto-filled.</div></div>' +
     '<div class="field"><label>API Key</label><input class="sure-auth__input" type="password" id="newKeyValue" placeholder="sk-or-v1-...">' +
-    '<div class="hint">Get your key at openrouter.ai/keys</div></div>' +
+    '<div class="hint" id="newKeyHint">Get your key at openrouter.ai/keys</div></div>' +
     '<button class="sure-auth__btn" onclick="addApiKey()">Save Key</button></div>'
 }
 
@@ -1416,11 +1471,36 @@ function toggleKeyBaseUrl() {
   const val = document.getElementById('newKeyProvider').value
   const field = document.getElementById('keyBaseUrlField')
   const input = document.getElementById('newKeyBaseUrl')
+  const keyInput = document.getElementById('newKeyValue')
+  const hint = document.getElementById('newKeyHint')
   if (val === 'openai-compatible') {
     field.style.display = 'block'
+    const lbl = field.querySelector('label')
+    if (lbl) lbl.textContent = 'Base URL'
     if (!input.value) input.placeholder = 'http://localhost:8080/v1'
+  } else if (val === 'firesearch') {
+    field.style.display = 'block'
+    if (!input.value) input.placeholder = 'https://your-instance.firesearch.dev'
+    const lbl = field.querySelector('label')
+    if (lbl) lbl.textContent = 'Instance Host'
   } else {
     field.style.display = 'none'
+  }
+  // Per-provider key guidance — otherwise SerpAPI looks like an OpenRouter key.
+  if (keyInput && hint) {
+    if (val === 'serpapi') {
+      keyInput.placeholder = 'SerpAPI key (hex)'
+      hint.textContent = 'Find it at serpapi.com → API Key. Enables live results for the web_search tool.'
+    } else if (val === 'exa') {
+      keyInput.placeholder = 'Exa API key'
+      hint.textContent = 'Find it at dashboard.exa.ai → API Keys. Second web_search backend after SerpAPI.'
+    } else if (val === 'firesearch') {
+      keyInput.placeholder = 'Firesearch secret API key'
+      hint.textContent = 'Secret key for your Firesearch instance (server-side only). Enables the firesearch_* tools.'
+    } else {
+      keyInput.placeholder = 'sk-or-v1-...'
+      hint.textContent = 'Get your key at openrouter.ai/keys'
+    }
   }
 }
 
@@ -1511,11 +1591,13 @@ function loadToolList() {
     const capable = ['openai', 'openai-compatible'].includes(config.provider)
     const banner = capable
       ? ''
-      : '<div style="font-size:0.75rem;color:var(--text);margin-bottom:0.75rem;padding:0.375rem 0.5rem;background:var(--highlight);border-radius:4px">Tools need an OpenAI-compatible provider — current: <strong>' + escHtml(config.provider || 'mock') + '</strong> (mock / Anthropic / Google ignore tools).</div>'
+      : '<div style="font-size:0.75rem;color:var(--text);margin-bottom:0.75rem;padding:0.375rem 0.5rem;background:var(--highlight);border-radius:4px">Tools need a tool-capable provider — current: <strong>' + escHtml(config.provider || 'mock') + '</strong> (mock demonstrates tools; Anthropic / Google ignore tool schemas).</div>'
     list.innerHTML = banner + data.tools.map(t => {
       const searchNote = t.name === 'web_search'
-        ? '<div style="margin-top:0.25rem;font-size:0.6875rem;color:var(--muted)">' + (t.live ? 'Live web search (SerpAPI key configured).' : 'Mock results — add a SerpAPI key in the 🔑 Keys dialog for live search.') + '</div>'
-        : ''
+        ? '<div style="margin-top:0.25rem;font-size:0.6875rem;color:var(--muted)">' + (t.live ? 'Live web search (SerpAPI/Exa key configured).' : 'Mock results — add a SerpAPI or Exa key in the 🔑 Keys dialog for live search.') + '</div>'
+        : (t.name === 'firesearch_search'
+          ? '<div style="margin-top:0.25rem;font-size:0.6875rem;color:var(--muted)">' + (t.live ? 'Connected to your Firesearch instance.' : 'Not connected — add a Firesearch key + instance host in the 🔑 Keys dialog.') + '</div>'
+          : '')
       return '<div style="display:flex;gap:0.625rem;align-items:flex-start;padding:0.75rem;border:1px solid var(--border);border-radius:8px;margin-bottom:0.5rem">' +
         '<input type="checkbox" ' + (t.enabled ? 'checked' : '') + ' onchange="toggleTool(\'' + escHtml(t.name) + '\', this.checked)" style="margin-top:0.2rem" title="Enable/disable this tool">' +
         '<div><div style="font-weight:600;font-size:0.875rem">' + escHtml(t.name) + '</div>' +

@@ -69,13 +69,22 @@ Open the **Settings** drawer to:
 - Switch between Nord, Forest, and Dracula themes
 
 Open the **🔧 Tools** dialog to:
-- Enable/disable tools (`web_search`, `calculator`, `current_time`) — persisted server-side in `.tools.json`
-- See whether `web_search` is live or returning mock results
+- Enable/disable tools (`web_search`, `calculator`, `current_time`, `firesearch_*`) — persisted server-side in `.tools.json`
+- See whether `web_search` is live or returning mock results, and whether `firesearch_search` is connected
 
-Tools only fire on OpenAI-compatible providers (`openai`, `openai-compatible`) —
-mock / Anthropic / Google ignore tool schemas. Live web search needs a SerpAPI
-key: add it in the **🔑 Keys** dialog (stored encrypted, verified against
-SerpAPI before saving).
+Tools fire on `openai`, `openai-compatible`, and `openrouter` providers —
+`mock` demonstrates the loop with heuristic tool calls (no API key).
+Anthropic / Google ignore tool schemas. Live web search needs a SerpAPI
+or Exa key: add it in the **🔑 Keys** dialog (stored encrypted, verified before
+saving). The `firesearch_*` tools need a Firesearch instance: add a
+**Firesearch** key with its instance host as Base URL (secret key stays
+server-side, never sent to the browser).
+
+Attach images and files (PDF, text, CSV…) with the 📎 button: images get a
+thumbnail preview and render inline in your message; files ride along as
+message parts. Backend mapping is per-provider (images/PDFs native on
+OpenAI, Anthropic, and Google; spreadsheets/Word docs are noted as
+unsupported by most chat APIs). Attachments are capped at 3MB.
 
 ## How it showcases each project
 
@@ -395,8 +404,9 @@ Lists registered tools with UI state:
 [{ "name": "web_search", "description": "...", "parameters": [...], "enabled": true, "live": false }]
 ```
 
-`live` (only on `web_search`) reports whether a SerpAPI key is configured —
-without one the tool returns mock results.
+`live` (on `web_search` and `firesearch_search`) reports whether a search key
+is configured — `web_search` needs a SerpAPI or Exa key (mock results without
+one), `firesearch_search` needs a Firesearch host plus key.
 
 ### `POST /api/tools`
 
