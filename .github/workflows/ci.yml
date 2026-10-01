@@ -85,10 +85,11 @@ jobs:
           "
           npm install --no-package-lock --no-audit --no-fund
 
+      # `npm ci` requires a lockfile, which this example deliberately has none
+      # of — its dependencies are the two local checkouts. playwright is a
+      # devDependency, so the install above already fetched it.
       - name: Install Chromium
-        run: |
-          npm ci --no-save playwright
-          npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium
 
       # Proves a generated form renders, validates and themes in a real
       # browser. `npm test` also regenerates from schema.sql, so this fails if
