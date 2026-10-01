@@ -1,0 +1,350 @@
+[
+  {
+    "name": "id",
+    "label": "Id",
+    "control": "text",
+    "type": "text",
+    "required": false,
+    "readOnly": true,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": null,
+      "maxLength": null
+    },
+    "sanitize": [
+      "trim",
+      "collapseWhitespace",
+      "normalize: NFKC",
+      "stripControl",
+      "slice(0, maxLength)"
+    ],
+    "help": "",
+    "hints": {
+      "placeholder": "Enter text...",
+      "help": "",
+      "error": {
+        "format": "",
+        "required": "This field is required"
+      }
+    },
+    "source": {
+      "table": "subscribers",
+      "column": "id"
+    }
+  },
+  {
+    "name": "email",
+    "label": "Email",
+    "control": "text",
+    "type": "email",
+    "required": true,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
+      "minLength": null,
+      "maxLength": 254
+    },
+    "sanitize": [
+      "trim",
+      "lowercase",
+      "normalize: NFKC",
+      "stripControl",
+      "slice(0, 254)"
+    ],
+    "help": "Email address",
+    "hints": {
+      "placeholder": "user@example.com",
+      "help": "Email address",
+      "error": {
+        "format": "Invalid email address",
+        "required": "Email is required"
+      }
+    },
+    "source": {
+      "table": "subscribers",
+      "column": "email"
+    }
+  },
+  {
+    "name": "display_name",
+    "label": "Display name",
+    "control": "text",
+    "type": "full-name",
+    "required": true,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": null,
+      "maxLength": 100
+    },
+    "sanitize": [
+      "trim",
+      "collapseWhitespace",
+      "normalize: NFKC",
+      "stripControl",
+      "slice(0, 100)"
+    ],
+    "help": "Full legal name",
+    "hints": {
+      "placeholder": "Jane Doe",
+      "help": "Full legal name",
+      "error": {
+        "format": "Name must be 1-100 characters",
+        "required": "Name is required"
+      }
+    },
+    "source": {
+      "table": "subscribers",
+      "column": "display_name"
+    }
+  },
+  {
+    "name": "plan",
+    "label": "Plan",
+    "control": "text",
+    "type": "text",
+    "required": true,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": null,
+      "maxLength": null
+    },
+    "sanitize": [
+      "trim",
+      "collapseWhitespace",
+      "normalize: NFKC",
+      "stripControl",
+      "slice(0, maxLength)"
+    ],
+    "help": "",
+    "hints": {
+      "placeholder": "Enter text...",
+      "help": "",
+      "error": {
+        "format": "",
+        "required": "This field is required"
+      }
+    },
+    "source": {
+      "table": "subscribers",
+      "column": "plan"
+    }
+  },
+  {
+    "name": "signup_date",
+    "label": "Signup date",
+    "control": "text",
+    "type": "date-us",
+    "required": true,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": "^\\d{2}/\\d{2}/\\d{4}$",
+      "minLength": null,
+      "maxLength": 10
+    },
+    "sanitize": [
+      "trim",
+      "normalize: NFKC",
+      "slice(0, 10)"
+    ],
+    "help": "Date in MM/DD/YYYY format",
+    "hints": {
+      "placeholder": "07/24/2026",
+      "help": "Date in MM/DD/YYYY format",
+      "error": {
+        "format": "Must be a valid date in MM/DD/YYYY format",
+        "required": "Date is required"
+      }
+    },
+    "source": {
+      "table": "subscribers",
+      "column": "signup_date"
+    }
+  },
+  {
+    "name": "notes",
+    "label": "Notes",
+    "control": "text",
+    "type": "text",
+    "required": false,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": null,
+      "maxLength": null
+    },
+    "sanitize": [
+      "trim",
+      "collapseWhitespace",
+      "normalize: NFKC",
+      "stripControl",
+      "slice(0, maxLength)"
+    ],
+    "help": "",
+    "hints": {
+      "placeholder": "Enter text...",
+      "help": "",
+      "error": {
+        "format": "",
+        "required": "This field is required"
+      }
+    },
+    "source": {
+      "table": "subscribers",
+      "column": "notes"
+    }
+  },
+  {
+    "name": "invitations_id",
+    "label": "Id",
+    "control": "text",
+    "type": "text",
+    "required": false,
+    "readOnly": true,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": null,
+      "maxLength": null
+    },
+    "sanitize": [
+      "trim",
+      "collapseWhitespace",
+      "normalize: NFKC",
+      "stripControl",
+      "slice(0, maxLength)"
+    ],
+    "help": "",
+    "hints": {
+      "placeholder": "Enter text...",
+      "help": "",
+      "error": {
+        "format": "",
+        "required": "This field is required"
+      }
+    },
+    "source": {
+      "table": "invitations",
+      "column": "id"
+    }
+  },
+  {
+    "name": "invitations_email",
+    "label": "Email",
+    "control": "text",
+    "type": "email",
+    "required": true,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": "^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$",
+      "minLength": null,
+      "maxLength": 254
+    },
+    "sanitize": [
+      "trim",
+      "lowercase",
+      "normalize: NFKC",
+      "stripControl",
+      "slice(0, 254)"
+    ],
+    "help": "Email address",
+    "hints": {
+      "placeholder": "user@example.com",
+      "help": "Email address",
+      "error": {
+        "format": "Invalid email address",
+        "required": "Email is required"
+      }
+    },
+    "source": {
+      "table": "invitations",
+      "column": "email"
+    }
+  },
+  {
+    "name": "invited_by",
+    "label": "Invited by",
+    "control": "text",
+    "type": "text",
+    "required": true,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": null,
+      "maxLength": null
+    },
+    "sanitize": [
+      "trim",
+      "collapseWhitespace",
+      "normalize: NFKC",
+      "stripControl",
+      "slice(0, maxLength)"
+    ],
+    "help": "",
+    "hints": {
+      "placeholder": "Enter text...",
+      "help": "",
+      "error": {
+        "format": "",
+        "required": "This field is required"
+      }
+    },
+    "source": {
+      "table": "invitations",
+      "column": "invited_by"
+    }
+  },
+  {
+    "name": "created_at",
+    "label": "Created at",
+    "control": "text",
+    "type": "text",
+    "required": false,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": null,
+      "maxLength": null
+    },
+    "sanitize": [
+      "trim",
+      "collapseWhitespace",
+      "normalize: NFKC",
+      "stripControl",
+      "slice(0, maxLength)"
+    ],
+    "help": "",
+    "hints": {
+      "placeholder": "Enter text...",
+      "help": "",
+      "error": {
+        "format": "",
+        "required": "This field is required"
+      }
+    },
+    "source": {
+      "table": "invitations",
+      "column": "created_at"
+    }
+  }
+]
