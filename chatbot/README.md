@@ -34,7 +34,7 @@
 │  │  sure-web-testing (E2E tests)                     │   │
 │  │  BrowserManager — launch, navigate, interact,     │   │
 │  │  inspect DOM/console/network between every step   │   │
-│  │  21 tests covering full chat UI flow              │   │
+│  │  26 tests covering full chat UI flow              │   │
 │  └───────────────────────────────────────────────────┘   │
 └───────────────────────────────────────────────────────────┘
 ```
@@ -46,6 +46,7 @@ cd sure-examples/chatbot
 npm run setup              # install + build the file: linked sure-* deps
 npm start                    # tsx server.js
 # → http://localhost:3001
+```
 
 Open the browser. The chatbot starts in mock mode — no API key needed. Type a message, and the mock provider returns a canned response.
 
@@ -55,18 +56,18 @@ Open the browser. The chatbot starts in mock mode — no API key needed. Type a 
 python3 -m venv .venv
 .venv/bin/pip install -e /path/to/sure-web-testing
 .venv/bin/playwright install chromium
-.venv/bin/python tests/run_tests.py    # 21 tests, all pass
+.venv/bin/python tests/run_tests.py    # 26 tests, all pass
 ```
 
 The runner stops stale chatbot servers on port 3001 before starting
 (`tests/chatbot_cleanup.py`), so leftover manual `tsx server.js`
 processes no longer mask the current build.
 
-Open the **Settings** drawer to:
+Open the **Settings** modal (⚙ in the header menu) to:
 - Switch to OpenAI or Anthropic (enter your API key)
 - Change the model
 - Adjust temperature
-- Switch between Nord, Forest, and Dracula themes
+- Switch between Nord, Forest, Dracula, and Dark themes
 
 Open the **🔧 Tools** dialog to:
 - Enable/disable tools (`web_search`, `calculator`, `current_time`, `firesearch_*`) — persisted server-side in `.tools.json`
@@ -261,7 +262,7 @@ The generated output would include validation regexes, sanitization pipelines (t
 
 ### sure-web-testing — E2E Browser Testing
 
-21 E2E tests run against the real chatbot using sure-web-testing's `BrowserManager`. The test script at `tests/test_chatbot.py` demonstrates multi-step browser testing:
+26 E2E tests run against the real chatbot using sure-web-testing's `BrowserManager`. The test script at `tests/test_chatbot.py` demonstrates multi-step browser testing:
 
 ```python
 from browser import BrowserManager
@@ -291,12 +292,12 @@ The test suite covers 21 scenarios:
 | 3 | `verify page load` | Title and URL are correct |
 | 4 | `verify sidebar` | Sidebar header, settings button, chat input exist |
 | 5 | `screenshot initial` | Base64 screenshot captured |
-| 6 | `open settings` | Settings button click opens drawer |
-| 7 | `verify settings` | Provider select, API key, model, temp, themes all present |
+| 6 | `open settings` | Header menu opens the Settings modal |
+| 7 | `verify settings` | Provider select, model, temperature, themes all present |
 | 8 | `switch theme` | Dracula theme applies via click |
 | 9 | `screenshot dracula` | Visual confirmation of theme change |
 | 10 | `switch back to nord` | Theme switches back |
-| 11 | `close settings` | Drawer closes |
+| 11 | `close settings` | Modal closes |
 | 12 | `send message` | Text fills and send button works |
 | 13 | `verify response` | Assistant response appears in DOM |
 | 14 | `screenshot with messages` | Chat with conversation captured |
@@ -305,8 +306,16 @@ The test suite covers 21 scenarios:
 | 17 | `clear messages` | Clear button works |
 | 18 | `new conversation` | New conversation button works |
 | 19 | `verify new conversation` | Clean state after new conversation |
-| 20 | `screenshot final` | Final state captured |
-| 21 | `close` | Browser session cleaned up |
+| 20 | `preview panel` | Right-hand preview panel opens and renders |
+| 21 | `key management` | API Keys modal opens |
+| 22 | `screenshot final` | Final state captured |
+| 23 | `close` | Browser session cleaned up |
+
+Each step asserts against the live DOM — element text, attributes, or the
+CSS the app actually injected. Assertions are scoped to a specific element
+rather than the whole page, because `page.content()` includes inline
+`<script>` source (83% of this page), so a whole-page substring check can
+pass by matching a JavaScript string literal instead of anything visible.
 
 Each step is a separate browser interaction — the session stays alive between calls, and you can inspect DOM, console, network, and screenshots between every step.
 
@@ -343,7 +352,7 @@ npm start                    # terminal 1: start chatbot
 │  └───────┘  │                    │  ┌─────────────┐  │
 │  ┌───────┐  │                    │  │ sure-state   │  │
 │  │Settings│  │                    │  │ EventBus    │  │
-│  │ Drawer │  │                    │  └─────────────┘  │
+│  │ Modal  │  │                    │  └─────────────┘  │
 │  └───────┘  │                    │                   │
 │  ┌───────┐  │                    │  ┌─────────────┐  │
 │  │Theme  │  │                    │  │ sure-ui      │  │
@@ -429,7 +438,7 @@ chatbot/
     index.html     ← single-file frontend (chat UI + settings + themes + cookie persistence)
   tests/
     run_tests.py   ← test runner (starts server, runs tests, cleans up)
-    test_chatbot.py ← 21 E2E tests using sure-web-testing BrowserManager
+    test_chatbot.py ← 26 E2E tests using sure-web-testing BrowserManager
 ```
 
 ## Extending
