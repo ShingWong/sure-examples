@@ -1,0 +1,130 @@
+name: CI
+
+# The chatbot depends on its sibling sure-* packages via `file:../../sure-*`
+# links, so CI has to reproduce the same sibling layout. Each repo is checked
+# out into ../<name> relative to sure-examples, which is what those links
+# resolve to.
+#
+# Note: `npm ci` exits 0 even when every `file:` link dangles — it silently
+# installs nothing usable. The `verify imports` step below exists specifically
+# to catch that, so do not treat a green install as proof the deps resolved.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out sure-examples
+        uses: actions/checkout@v6
+        with:
+          path: sure-examples
+
+      - name: Check out sure-gentic
+        uses: actions/checkout@v6
+        with:
+          repository: ShingWong/sure-gentic
+          ref: main
+          path: sure-gentic
+
+      - name: Check out sure-state
+        uses: actions/checkout@v6
+        with:
+          repository: ShingWong/sure-state
+          ref: main
+          path: sure-state
+
+      - name: Check out sure-ui
+        uses: actions/checkout@v6
+        with:
+          repository: ShingWong/sure-ui
+          ref: master
+          path: sure-ui
+
+      - name: Check out sure-web-testing
+        uses: actions/checkout@v6
+        with:
+          repository: ShingWong/sure-web-testing
+          ref: main
+          path: sure-web-testing
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sure-examples/chatbot/package-lock.json
+
+      - name: Build the sure-* packages
+        run: |
+          set -euo pipefail
+          for pkg in sure-gentic sure-state sure-ui; do
+            echo "::group::build $pkg"
+            npm --prefix "$pkg" ci
+            npm --prefix "$pkg" run build
+            echo "::endgroup::"
+          done
+
+      - name: Install chatbot dependencies
+        working-directory: sure-examples/chatbot
+        run: npm ci
+
+      # `npm ci` exits 0 with dangling file: links, so verify the packages
+      # actually resolve before relying on the server starting.
+      - name: Verify sure-* imports resolve
+        working-directory: sure-examples/chatbot
+        run: |
+          set -euo pipefail
+          for pkg in sure-gentic sure-state sure-ui; do
+            if [ ! -e "node_modules/$pkg/package.json" ]; then
+              echo "::error::$pkg did not install (dangling file: link)"
+              exit 1
+            fi
+          done
+          node --input-type=module -e "
+            for (const m of ['sure-gentic','sure-state','sure-ui']) {
+              await import(m);
+              console.log('  ' + m + ' resolves');
+            }
+          "
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -e ./sure-web-testing
+          python -m playwright install --with-deps chromium
+
+      - name: Run E2E suite
+        working-directory: sure-examples/chatbot
+        env:
+          ALLOW_EVALUATE: 'true'
+          CI: 'true'
+        run: python3 tests/run_tests.py
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          # BrowserManager.screenshot() writes to tempfile.gettempdir(), so
+          # screenshots land in /tmp rather than a repo-relative directory.
+          name: chatbot-screenshots
+          path: /tmp/awt_*.png
+          retention-days: 7
+          if-no-files-found: ignore
