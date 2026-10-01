@@ -89,6 +89,7 @@ jobs:
       # of — its dependencies are the two local checkouts. playwright is a
       # devDependency, so the install above already fetched it.
       # playwright is already installed as a devDependency by the step above.
+      # (comment-only change to re-run against the latest sure-ui master)
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
