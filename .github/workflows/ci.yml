@@ -88,6 +88,7 @@ jobs:
       # `npm ci` requires a lockfile, which this example deliberately has none
       # of — its dependencies are the two local checkouts. playwright is a
       # devDependency, so the install above already fetched it.
+      # playwright is already installed as a devDependency by the step above.
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
