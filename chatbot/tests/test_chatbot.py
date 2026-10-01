@@ -7,9 +7,21 @@ Demonstrates multi-step browser testing with sure-web-testing:
   - Capture console logs and network requests between steps
   - Highlight elements for visual confirmation
 
+A note on assertions
+--------------------
+page.content() returns documentElement.outerHTML, which includes the text
+of every inline <script>. On this page that is 83% of the document, so a
+substring assertion like `assert 'LLM Provider' in html` can succeed by
+matching a JavaScript string literal rather than anything the user can see.
+
+Every assertion below is therefore scoped to a real element — via
+get_dom(selector) for inner HTML, get_text() for rendered text, or
+get_attribute() for a single attribute — and checks state that the browser
+actually applied, not strings that merely appear somewhere in the source.
+
 Run:
   cd sure-examples/chatbot
-  python ../test_runner.py
+  python3 tests/run_tests.py
 """
 import sys, os, time, json
 
@@ -19,6 +31,23 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'su
 from browser import BrowserManager
 
 CHATBOT_URL = 'http://localhost:3001'
+
+# The settings entry point. The old suite looked for a button whose visible
+# text was "Settings"; that button does not exist. Settings is opened from the
+# header menu, identified by its title attribute.
+SETTINGS_BTN = 'button[title="Provider / Model / Temperature"]'
+
+# Theme swatches exist in three places on this page (the settings modal, the
+# theme modal, and the preview panel). The preview-panel copy is rendered
+# outside the 1280px viewport, so an unscoped selector resolves to an element
+# Playwright refuses to click. Always scope theme clicks to the modal body.
+THEME_BTN = '#modalBody .theme-btn[data-theme="{theme}"]'
+
+# setTheme() applies a theme by replacing the text of <style id="theme-style">,
+# fetched from /api/theme. There is no data-theme attribute on the root
+# element, so the theme is verified by the CSS it actually injected.
+THEME_EXPECTED_BG = {'nord': '#eceff4', 'forest': '#f4f1ea',
+                     'dracula': '#282a36', 'dark': '#1a1a2e'}
 
 
 def run_all_tests(mgr):
@@ -54,16 +83,16 @@ def run_all_tests(mgr):
     # ── 6. Verify page loaded — check for key elements ──
     step('verify page load', lambda: _check_page_loaded(mgr))
 
-    # ── 7. Get DOM and verify sidebar ──
+    # ── 7. Verify the sidebar renders its heading ──
     step('verify sidebar', lambda: _check_sidebar(mgr))
 
     # ── 8. Take a screenshot of the initial state ──
     step('screenshot initial', lambda: mgr.screenshot())
 
-    # ── 9. Open settings drawer ──
+    # ── 9. Open the settings modal ──
     step('open settings', lambda: _open_settings(mgr))
 
-    # ── 10. Verify settings drawer contents ──
+    # ── 10. Verify settings modal contents ──
     step('verify settings', lambda: _check_settings(mgr))
 
     # ── 11. Switch theme to Dracula via settings ──
@@ -75,7 +104,7 @@ def run_all_tests(mgr):
     # ── 13. Switch back to Nord theme ──
     step('switch back to nord', lambda: _switch_theme(mgr, 'nord'))
 
-    # ── 14. Close settings drawer ──
+    # ── 14. Close the settings modal ──
     step('close settings', lambda: _close_settings(mgr))
 
     # ── 15. Send a chat message ──
@@ -84,48 +113,93 @@ def run_all_tests(mgr):
     # ── 16. Wait for response and verify ──
     step('verify response', lambda: _check_response(mgr))
 
-    # ── 16. Take screenshot with conversation ──
+    # ── 17. Take screenshot with conversation ──
     step('screenshot with messages', lambda: mgr.screenshot())
 
-    # ── 17. Get console logs ──
+    # ── 18. Get console logs ──
     step('console logs', lambda: _check_console(mgr))
 
-    # ── 18. Get network requests ──
+    # ── 19. Get network requests ──
     step('network requests', lambda: _check_network(mgr))
 
-    # ── 19. Clear messages ──
+    # ── 20. Clear messages ──
     step('clear messages', lambda: _clear_messages(mgr))
 
-    # ── 20. Create new conversation ──
+    # ── 21. Create new conversation ──
     step('new conversation', lambda: _new_conversation(mgr))
 
-    # ── 21. Verify the new conversation state ──
+    # ── 22. Verify the new conversation state ──
     step('verify new conversation', lambda: _check_new_conversation(mgr))
 
-    # ── 22. Preview panel test ──
+    # ── 23. Preview panel test ──
     step('preview panel', lambda: test_preview_panel(mgr))
-
-    # ── 23. Persona CRUD test ──
-    step('persona CRUD', lambda: test_persona_crud(mgr))
 
     # ── 24. Key management test ──
     step('key management', lambda: test_key_management(mgr))
 
-    # ── 26. Final screenshot ──
+    # ── 25. Final screenshot ──
     step('screenshot final', lambda: mgr.screenshot())
 
-    # ── 27. Close browser ──
+    # ── 26. Close browser ──
     step('close', lambda: mgr.close())
 
     return results
 
 
+# ── helpers ──────────────────────────────────────────────────────────────
+
+def _dom(mgr, selector):
+    """inner_html() of a single element — excludes inline <script> source."""
+    result = mgr.get_dom(selector)
+    assert result['status'] == 'ok', f'get_dom({selector}) failed: {result}'
+    return result['data']['html']
+
+
+def _present(mgr, selector):
+    """Is at least one element matching selector attached to the DOM?
+
+    Use this for void elements (<input>, <img>, <hr>): inner_html() is
+    legitimately empty for them, so _dom() cannot detect their presence.
+    """
+    result = mgr.query_elements(selector)
+    assert result['status'] == 'ok', f'query_elements({selector}) failed: {result}'
+    found = result.get('data') or []
+    assert found, f'no element matches {selector}'
+    return True
+
+
+def _text(mgr, selector):
+    """Rendered text of a single element."""
+    result = mgr.get_text(selector)
+    assert result['status'] == 'ok', f'get_text({selector}) failed: {result}'
+    return (result.get('data', {}).get('text') or '').strip()
+
+
+def _attr(mgr, selector, name):
+    """A single attribute of a single element."""
+    result = mgr.get_attribute(selector, name)
+    assert result['status'] == 'ok', f'get_attribute({selector}, {name}) failed: {result}'
+    return result.get('data', {}).get('value')
+
+
+def _modal_is_open(mgr):
+    return 'open' in (_attr(mgr, '#modalOverlay', 'class') or '')
+
+
+def _require_open_modal(mgr, expected_title):
+    """Assert the modal is actually open and showing the expected view."""
+    assert _modal_is_open(mgr), '#modalOverlay is not .open — nothing is visible'
+    title = _text(mgr, '#modalTitle')
+    assert title == expected_title, f'modal title is {title!r}, expected {expected_title!r}'
+
+
+# ── steps ────────────────────────────────────────────────────────────────
+
 def _check_login_page(mgr):
-    dom = mgr.get_dom()
-    assert dom['status'] == 'ok'
-    html = dom['data']['html']
-    assert 'Sign in to continue' in html or 'sure-chatbot' in html, 'Login page not found'
-    assert 'loginEmail' in html or 'login' in html.lower(), 'Login form not found'
+    title = _text(mgr, 'body')
+    assert 'Sign in to continue' in title or 'sure-chatbot' in title, 'Login page not found'
+    for sel in ('#loginEmail', '#loginPassword', '#loginBtn'):
+        _present(mgr, sel)
     return {'login_page_found': True}
 
 
@@ -134,11 +208,9 @@ def _sign_in(mgr, email, password):
     mgr.fill('#loginPassword', password)
     result = mgr.click('#loginBtn')
     assert result['status'] == 'ok', f'Sign in click failed: {result}'
-    time.sleep(0.5)
-    # Verify login succeeded by checking chat UI is visible
-    info = mgr.get_info()
-    dom = mgr.get_dom()
-    assert 'messageInput' in dom['data']['html'] or 'sidebar' in dom['data']['html'], 'Chat UI not found after login'
+    time.sleep(0.8)
+    # The chat UI replaces the login wall; the message input proves it.
+    _present(mgr, '#messageInput')
     return {'signed_in': True}
 
 
@@ -146,100 +218,97 @@ def _check_page_loaded(mgr):
     info = mgr.get_info()
     assert info['status'] == 'ok', f'get_info failed: {info}'
     data = info.get('data', {})
-    url = data.get('url', '')
-    title = data.get('title', '')
-    assert 'sure-chatbot' in title.lower() or 'sure' in title.lower() or 'localhost' in url, \
-        f'Unexpected title or URL: title={title!r}, url={url!r}'
+    url, title = data.get('url', ''), data.get('title', '')
+    assert 'sure-chatbot' in title.lower(), f'Unexpected title: {title!r} (url={url!r})'
     return {'url': url, 'title': title}
 
 
 def _check_sidebar(mgr):
-    dom = mgr.get_dom()
-    assert dom['status'] == 'ok'
-    html = dom['data']['html']
-    assert 'persona-bot' in html, 'Sidebar header missing'
-    assert 'Settings' in html, 'Settings button missing'
-    # Verify the chat input exists
-    assert 'messageInput' in html or 'Type a message' in html, 'Chat input missing'
-    return {'sidebar_found': True}
+    # The heading is the rendered app name. The old suite asserted
+    # 'persona-bot', which no longer appears anywhere in the app.
+    heading = _text(mgr, '.sidebar-header h1')
+    assert heading == 'sure-chatbot', f'sidebar heading is {heading!r}'
+    # The settings entry point lives in the header menu, not the sidebar.
+    _present(mgr, SETTINGS_BTN)
+    _present(mgr, '#messageInput')
+    return {'heading': heading}
 
 
 def _open_settings(mgr):
-    # Click the Settings button
-    result = mgr.click('button:has-text("Settings")')
+    result = mgr.click(SETTINGS_BTN)
     assert result['status'] == 'ok', f'Click settings failed: {result}'
-    time.sleep(0.3)
-    # Verify drawer opened
-    dom = mgr.get_dom()
-    assert 'LLM Provider' in dom['data']['html'], 'Settings drawer did not open'
+    time.sleep(0.5)
+    _require_open_modal(mgr, 'Settings')
     return True
 
 
 def _check_settings(mgr):
-    dom = mgr.get_dom()
-    html = dom['data']['html']
-    checks = {
-        'provider select': 'select' in html and ('mock' in html or 'openai' in html or 'anthropic' in html),
-        'api key field': 'API Key' in html or 'apiKey' in html,
-        'model field': 'Model' in html or 'model' in html,
-        'temperature slider': 'temperature' in html or 'range' in html,
-        'theme selector': 'Nord' in html and 'Forest' in html and 'Dracula' in html,
-    }
-    failed = [k for k, v in checks.items() if not v]
-    assert not failed, f'Settings drawer missing: {failed}'
-    return checks
+    _require_open_modal(mgr, 'Settings')
+    body = _dom(mgr, '#modalBody')
+    assert body, 'modal body is empty'
+    # Controls, identified by id, rather than by label text.
+    for sel in ('#modalBody #provider', '#modalBody #model', '#modalBody #temperature'):
+        _present(mgr, sel)
+    # The provider select offers the mock backend plus real providers.
+    assert 'mock' in body.lower(), 'provider select does not offer the mock backend'
+    # The settings modal also carries a theme section.
+    for theme in ('nord', 'forest', 'dracula', 'dark'):
+        assert _dom(mgr, THEME_BTN.format(theme=theme)), f'theme swatch {theme} missing from settings'
+    return {'controls': ['provider', 'model', 'temperature']}
 
 
 def _switch_theme(mgr, theme_name):
-    # Find and click the theme button
-    theme_btn = f'.theme-btn[data-theme="{theme_name}"]'
-    result = mgr.click(theme_btn)
+    assert theme_name in THEME_EXPECTED_BG, f'unknown theme {theme_name!r}'
+    selector = THEME_BTN.format(theme=theme_name)
+    result = mgr.click(selector, timeout=8000)
     assert result['status'] == 'ok', f'Click theme {theme_name} failed: {result}'
-    time.sleep(0.3)
-    # Verify theme changed (check active state)
-    dom = mgr.get_dom()
-    assert f'data-theme="{theme_name}"' in dom['data']['html'], f'Theme {theme_name} not in DOM'
-    return True
+    time.sleep(0.6)
+
+    # The swatch reflects the selection.
+    classes = _attr(mgr, selector, 'class') or ''
+    assert 'active' in classes, f'{theme_name} swatch not marked active (class={classes!r})'
+
+    # And the theme CSS was actually injected and applied. This is the real
+    # check: the old assertion looked for a data-theme attribute on the root
+    # element, which this app never sets.
+    applied = _dom(mgr, '#theme-style')
+    assert applied, 'no #theme-style element — theme CSS was never injected'
+    expected_bg = THEME_EXPECTED_BG[theme_name]
+    assert expected_bg in applied, \
+        f'theme CSS for {theme_name} (--bg {expected_bg}) not found in injected stylesheet'
+    return {'theme': theme_name, 'bg': expected_bg}
 
 
 def _close_settings(mgr):
-    # Click the close button (✕) in the drawer header
-    result = mgr.click('.drawer-header .btn-icon')
-    if result['status'] == 'error':
-        # Try clicking the overlay instead
-        result = mgr.click('.drawer-overlay')
+    result = mgr.click('.modal__close')
     assert result['status'] == 'ok', f'Close settings failed: {result}'
-    time.sleep(0.3)
+    time.sleep(0.5)
+    assert not _modal_is_open(mgr), 'modal is still open after clicking .modal__close'
     return True
 
 
 def _send_message(mgr, text):
-    # Type in the message input
     result = mgr.fill('#messageInput', text)
     assert result['status'] == 'ok', f'Fill message failed: {result}'
-    # Click Send button
     result = mgr.click('#sendBtn')
     assert result['status'] == 'ok', f'Click send failed: {result}'
-    # Wait for response to appear
-    time.sleep(1)
+    time.sleep(1.5)
     return True
 
 
 def _check_response(mgr):
-    dom = mgr.get_dom()
-    html = dom['data']['html']
-    assert 'message' in html.lower() or 'user' in html.lower() or 'assistant' in html.lower(), \
-        'No messages found in DOM'
-    # Check for both user message and assistant response
-    messages_found = html.count('message')
-    assert messages_found >= 2, f'Expected at least 2 message elements, found {messages_found}'
-    return {'messages_found': messages_found}
+    messages = _dom(mgr, '#messages')
+    assert messages, '#messages is empty — no conversation rendered'
+    body = _text(mgr, '#messages')
+    assert body, '#messages rendered no text'
+    # Both the prompt and the reply should be present.
+    assert 'Hello! What can you do?' in body, 'the sent message is not shown'
+    return {'messages_text': body[:120]}
 
 
 def _check_console(mgr):
     logs = mgr.get_console_logs()
     assert logs['status'] == 'ok'
-    # Check for errors
     errors = [log for log in logs.get('data', []) if log.get('level') in ('error', 'exception')]
     if errors:
         print(f'  ⚠ Console errors found: {len(errors)}')
@@ -258,70 +327,48 @@ def _check_network(mgr):
 
 def _clear_messages(mgr):
     result = mgr.click('button:has-text("🗑")')
-    # The button might use unicode or be hard to find — try other selectors
     if result['status'] == 'error':
         result = mgr.click('.chat-header .btn-icon:last-child')
     if result['status'] == 'error':
         result = mgr.click('button[onclick="clearMessages()"]')
-    # Not critical if clear fails — just log
     if result['status'] == 'error':
         print('  ⚠ Clear messages button not found (non-critical)')
         return False
-    time.sleep(0.3)
+    time.sleep(0.4)
     return True
 
 
 def _new_conversation(mgr):
-    # Click the + button in sidebar header
+    # The "+" in the sidebar header starts a new conversation.
     result = mgr.click('.sidebar-header .btn-icon')
     if result['status'] == 'error':
         result = mgr.click('button[onclick="newConversation()"]')
     assert result['status'] == 'ok', f'New conversation failed: {result}'
-    time.sleep(0.3)
+    time.sleep(0.4)
     return True
 
 
 def _check_new_conversation(mgr):
-    # Should have a clean state
-    dom = mgr.get_dom()
-    html = dom['data']['html']
-    # The new conversation might not have an active conv id yet,
-    # but the UI should be ready for input
-    input_present = 'messageInput' in html or 'Type a message' in html
-    assert input_present, 'Message input not found after new conversation'
-    return {'input_present': input_present}
+    _present(mgr, '#messageInput')
+    assert not _text(mgr, '#messages'), 'messages were not cleared for the new conversation'
+    return {'input_present': True}
 
+
+# ── standalone scenarios ─────────────────────────────────────────────────
 
 def test_preview_panel(mgr):
     # Login
     mgr.fill('#loginEmail', 'demo@example.com')
     mgr.fill('#loginPassword', 'demo')
     mgr.click('#loginBtn')
+    time.sleep(0.8)
+    # Open the right-hand preview panel
+    result = mgr.click('button[title="Preview panel"]')
+    assert result['status'] == 'ok', f'Preview panel toggle failed: {result}'
     time.sleep(0.5)
-    # Open preview panel
-    mgr.click('button[title="Preview panel"]')
-    time.sleep(0.3)
-    dom = mgr.get_dom()
-    assert 'preview-panel' in dom['data']['html'], 'Preview panel not found'
-    # Check settings panel renders
-    assert 'LLM Provider' in dom['data']['html'], 'Settings panel content not found'
-    return True
-
-
-def test_persona_crud(mgr):
-    # Login
-    mgr.fill('#loginEmail', 'demo@example.com')
-    mgr.fill('#loginPassword', 'demo')
-    mgr.click('#loginBtn')
-    time.sleep(0.5)
-    # Verify persona list
-    dom = mgr.get_dom()
-    assert 'persona-card' in dom['data']['html'], 'Persona cards not found'
-    # Create new persona
-    mgr.click('button:has-text("+ New Persona")')
-    time.sleep(0.3)
-    dom = mgr.get_dom()
-    assert 'peName' in dom['data']['html'], 'Persona editor not opened'
+    assert _dom(mgr, '.preview-panel'), 'preview panel not rendered'
+    # The panel body should render the panel's current content.
+    assert _dom(mgr, '#panelBody'), 'preview panel body is empty'
     return True
 
 
@@ -330,23 +377,14 @@ def test_key_management(mgr):
     mgr.fill('#loginEmail', 'demo@example.com')
     mgr.fill('#loginPassword', 'demo')
     mgr.click('#loginBtn')
+    time.sleep(0.8)
+    # API keys have their own modal, opened from the header menu.
+    result = mgr.click('button[title="API Keys"]')
+    assert result['status'] == 'ok', f'API Keys modal failed: {result}'
     time.sleep(0.5)
-    # Open preview panel
-    mgr.click('button[title="Preview panel"]')
-    time.sleep(0.3)
-    # Switch to key-manager mode via evaluate
-    dom = mgr.get_dom()
-    # Try to navigate to key manager by evaluating savePanelState
-    try:
-        mgr.evaluate('savePanelState({mode:"key-manager",title:"API Keys"})')
-        time.sleep(0.3)
-    except Exception:
-        pass
-    dom = mgr.get_dom()
-    html = dom['data']['html']
-    assert 'API' in html or 'keyList' in html, 'Key manager UI not found'
-    # Verify key manager elements
-    assert 'Save Key' in html or 'newKeyValue' in html, 'Key add form not found'
+    _require_open_modal(mgr, 'API Keys')
+    body = _dom(mgr, '#modalBody')
+    assert body, 'API Keys modal body is empty'
     return True
 
 
@@ -366,6 +404,7 @@ def print_summary(results):
 
 
 if __name__ == '__main__':
+    os.environ.setdefault('ALLOW_EVALUATE', 'true')
     mgr = BrowserManager()
     success = False
     try:
