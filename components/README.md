@@ -35,7 +35,7 @@ It prints a web address. Open it. You should see a form with fields for email,
 name, plan, date and notes — every one of them taken from `schema.sql`.
 
 > **If `npm install` cannot find the packages:** this example asks for
-> `sure-factor` 0.3.1 and `sure-ui` 0.1.4, which are published but may not be
+> `sure-factor` 0.3.2 and `sure-ui` 0.1.4, which are published but may not be
 > public yet. If you are working on the sure packages themselves, point at your
 > own copies instead:
 >

@@ -11,7 +11,7 @@
     "start": "npm run build && node scripts/serve.mjs"
   },
   "dependencies": {
-    "@shing.wong/sure-factor": "^0.3.1",
+    "@shing.wong/sure-factor": "^0.3.2",
     "@shing.wong/sure-ui": "^0.1.4"
   },
   "devDependencies": {
