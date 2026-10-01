@@ -1,0 +1,21 @@
+{
+  "name": "sure-components-example",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Walk-through: a database table becomes a working, themed, validated form \u2014 with no hand-written HTML",
+  "type": "module",
+  "scripts": {
+    "generate": "node scripts/generate.mjs",
+    "build": "npm run generate && node scripts/build.mjs",
+    "test": "node scripts/build.mjs && node --test tests/*.test.mjs",
+    "start": "npm run build && node scripts/serve.mjs"
+  },
+  "dependencies": {
+    "@shing.wong/sure-factor": "^0.3.1",
+    "@shing.wong/sure-ui": "^0.1.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0",
+    "playwright": "^1.56.0"
+  }
+}

@@ -20,6 +20,85 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  components:
+    name: components
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: sure-examples/components
+
+    steps:
+      - name: Check out sure-examples
+        uses: actions/checkout@v6
+        with:
+          path: sure-examples
+
+      # sure-factor and sure-ui are consumed from the working tree rather than
+      # the registry: this example tracks unreleased versions, so a published
+      # dependency would be a version behind the code it demonstrates.
+      - name: Check out sure-factor
+        uses: actions/checkout@v6
+        with:
+          repository: ShingWong/sure-factor
+          path: sure-factor
+
+      - name: Check out sure-ui
+        uses: actions/checkout@v6
+        with:
+          repository: ShingWong/sure-ui
+          ref: master
+          path: sure-ui
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          # No cache: this example has no lockfile (its dependencies are local
+          # checkouts), and setup-node's cache step fails if the path is absent.
+
+      - name: Build sure-factor and sure-ui
+        run: |
+          npm --prefix ../../sure-factor ci
+          npm --prefix ../../sure-factor run build
+          npm --prefix ../../sure-ui ci
+          npm --prefix ../../sure-ui run build
+
+      # The example declares published versions so a reader gets a working
+      # `npm install`. Those versions may not be public yet, so point the two
+      # dependencies at the checkouts above before installing.
+      #
+      # `--no-package-lock` keeps npm from writing a lockfile that would embed
+      # these local paths.
+      # `npm pkg set` cannot express these keys: the scope contains a dot, so
+      # it parses `dependencies.@shing.wong/...` as a nested path and writes
+      # junk. Rewrite the two entries with node instead.
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          node -e "
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            p.dependencies['@shing.wong/sure-factor'] = 'file:../../sure-factor';
+            p.dependencies['@shing.wong/sure-ui'] = 'file:../../sure-ui';
+            fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
+          "
+          npm install --no-package-lock --no-audit --no-fund
+
+      # `npm ci` requires a lockfile, which this example deliberately has none
+      # of — its dependencies are the two local checkouts. playwright is a
+      # devDependency, so the install above already fetched it.
+      # playwright is already installed as a devDependency by the step above.
+      # (comment-only change to re-run against the latest sure-ui master)
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Proves a generated form renders, validates and themes in a real
+      # browser. `npm test` also regenerates from schema.sql, so this fails if
+      # the committed form.ts no longer matches the schema.
+      - name: Run the example
+        run: npm test
+
   e2e:
     name: e2e
     runs-on: ubuntu-latest

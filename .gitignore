@@ -9,3 +9,6 @@ __pycache__/
 .ruff_cache/
 .superpowers/
 graphify-out/
+
+# local agent memory/state, not part of the repo
+.positronic/

@@ -6,7 +6,8 @@ Working software beats slide decks. This repo is where the **sure stack** stops 
 
 | Example | Description | Showcases |
 |---------|-------------|-----------|
-| [chatbot](./chatbot/) | Lightweight in-memory chatbot with configurable LLM provider, API keys, models, and themes. 21 E2E browser tests included. | sure-gentic, sure-state, sure-ui, sure-web-testing |
+| [chatbot](./chatbot/) | Lightweight in-memory chatbot with configurable LLM provider, API keys, models, and themes. 26 E2E browser tests included. | sure-gentic, sure-state, sure-ui, sure-web-testing |
+| [components](./components/) | **Start here if you are new.** Write a database table, get a working validated form. No HTML written by hand. | sure-factor, sure-ui |
 
 ## Meet the stack
 
@@ -14,7 +15,7 @@ Working software beats slide decks. This repo is where the **sure stack** stops 
 
 Build AI agents from three simple ideas — **Agents**, **Skills**, and **Tools** — then run them against OpenAI, Anthropic, Google, OpenRouter, or any OpenAI-compatible endpoint. Switching models is an environment variable, not a rewrite. A bounded tool loop with allowlists and citations keeps agents useful *and* auditable.
 
-*In the chatbot:* the entire conversation engine is one `Agent` + `runToolLoop`. Pick a provider in the settings drawer, and the same code path serves GPT-4o, Claude, Gemini, a local llama.cpp server — or the keyless `mock` provider, which even demonstrates tool calls on its own.
+*In the chatbot:* the entire conversation engine is one `Agent` + `runToolLoop`. Pick a provider in the settings dialog, and the same code path serves GPT-4o, Claude, Gemini, a local llama.cpp server — or the keyless `mock` provider, which even demonstrates tool calls on its own.
 
 ### [sure-state](https://github.com/ShingWong/sure-state) — state you can see into
 
@@ -26,13 +27,13 @@ The server is always the source of truth: entity stores with typed CRUD, real-ti
 
 Three cohesive themes (Nord, Forest, Dracula) injected as plain CSS strings at runtime — no bundler config, no framework, no rebuild to re-skin. Plus a unified notification system (inline, toast, status bar, side panel) and accessibility baked in, not bolted on.
 
-*In the chatbot:* the theme switcher in the settings drawer is literally one import swap. Toasts, dialogs, and the message layout all speak the same `sure-*` class language.
+*In the chatbot:* the theme switcher in the settings dialog is literally one import swap. Toasts, dialogs, and the message layout all speak the same `sure-*` class language.
 
 ### [sure-factor](https://github.com/ShingWong/sure-factor) — from schema to UI in one step
 
 Point sure-factor at a SQL schema and get production-grade form UIs — validated, sanitized, and internationalized from day one, at three quality tiers from weekend vibe to audited production. Fifteen built-in types (email, phone, ICD-10, SSN…) carry their own regex, pipelines, and translations.
 
-*In the chatbot:* not wired in yet — it's the newest sibling. Imagine the settings drawer and key-management forms generated from a schema instead of hand-written. That's the roadmap, and the `sure-ui` classes are already waiting for it.
+*In the chatbot:* not wired in yet — it's the newest sibling. Imagine the settings and key-management forms generated from a schema instead of hand-written. The [components example](./components/) is that roadmap, working: a form generated from a schema by sure-factor.
 
 ### [sure-web-testing](https://github.com/ShingWong/sure-web-testing) — a browser your agent can drive
 
