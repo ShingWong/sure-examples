@@ -54,8 +54,9 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 22
-          # No cache: this example has no lockfile (its dependencies are local
-          # checkouts), and setup-node's cache step fails if the path is absent.
+          # No cache: the lockfile in this example pins the sure-* packages to
+          # the registry, and this job rewrites those to local paths before
+          # installing, so a restored cache would contradict the manifest.
 
       - name: Build sure-factor and sure-ui
         run: |
@@ -65,8 +66,8 @@ jobs:
           npm --prefix ../../sure-ui run build
 
       # The example declares published versions so a reader gets a working
-      # `npm install`. Those versions may not be public yet, so point the two
-      # dependencies at the checkouts above before installing.
+      # `npm install`. CI uses the local checkouts instead, so the example is
+      # exercised against unreleased code rather than a version behind it.
       #
       # `--no-package-lock` keeps npm from writing a lockfile that would embed
       # these local paths.
@@ -85,17 +86,20 @@ jobs:
           "
           npm install --no-package-lock --no-audit --no-fund
 
-      # `npm ci` requires a lockfile, which this example deliberately has none
-      # of — its dependencies are the two local checkouts. playwright is a
-      # devDependency, so the install above already fetched it.
-      # playwright is already installed as a devDependency by the step above.
-      # (comment-only change to re-run against the latest sure-ui master)
+      # The example has a lockfile, but it pins the two sure-* packages to the
+      # registry, and this job deliberately uses the local checkouts instead so
+      # the example is tested against unreleased code. `--no-package-lock` keeps
+      # npm from rewriting it with those local paths. `npm ci` cannot be used
+      # here: it reads the lockfile, which is the thing being overridden.
+      # playwright is a devDependency, so the install above already fetched it.
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
       # Proves a generated form renders, validates and themes in a real
-      # browser. `npm test` also regenerates from schema.sql, so this fails if
-      # the committed form.ts no longer matches the schema.
+      # browser. `npm test` regenerates from schema.sql first, and
+      # tests/generated.test.mjs fails if the committed form.ts differs from
+      # what the generator produces — so a stale committed file is caught here
+      # rather than being quietly tested.
       - name: Run the example
         run: npm test
 

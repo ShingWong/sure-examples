@@ -7,12 +7,13 @@
   "scripts": {
     "generate": "node scripts/generate.mjs",
     "build": "npm run generate && node scripts/build.mjs",
-    "test": "node scripts/build.mjs && node --test tests/*.test.mjs",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "test:only": "node scripts/build.mjs && node --test tests/*.test.mjs",
     "start": "npm run build && node scripts/serve.mjs"
   },
   "dependencies": {
-    "@shing.wong/sure-factor": "^0.3.2",
-    "@shing.wong/sure-ui": "^0.1.4"
+    "@shing.wong/sure-factor": "^0.3.3",
+    "@shing.wong/sure-ui": "^0.1.5"
   },
   "devDependencies": {
     "esbuild": "^0.24.0",
