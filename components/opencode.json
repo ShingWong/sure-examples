@@ -1,0 +1,4 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": ["./node_modules/@shing.wong/sure-factor/.opencode/skills"]
+}
