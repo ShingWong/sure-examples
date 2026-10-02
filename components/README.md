@@ -43,6 +43,31 @@ name, plan, date and notes — every one of them taken from `schema.sql`.
 > npm test
 > ```
 
+## If you are using an AI agent
+
+`sure-factor` ships a skill with the package, and this folder already points
+OpenCode at it:
+
+```jsonc title="opencode.json"
+{
+  "skills": ["./node_modules/@shing.wong/sure-factor/.opencode/skills"]
+}
+```
+
+It tells an agent the things the API's type signatures do not: slice the DDL
+down to the one table before introspecting it, take columns out of the schema
+rather than building them by hand, read `catalog/types/<name>.yaml` instead of
+loading all sixteen types, and change `schema.sql` and regenerate rather than
+editing the generated `form.ts`.
+
+Only the skill's one-line description is loaded up front; the rest arrives when
+the agent decides it applies. It is plain Markdown, so you can also read it
+directly, or copy it somewhere you prefer.
+
+```bash
+cat node_modules/@shing.wong/sure-factor/.opencode/skills/sure-factor/SKILL.md
+```
+
 ## What just happened
 
 The `npm test` command ran two steps. Neither required you to write any UI code.
