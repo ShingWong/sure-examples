@@ -34,13 +34,13 @@ npm start
 It prints a web address. Open it. You should see a form with fields for email,
 name, plan, date and notes — every one of them taken from `schema.sql`.
 
-> **If `npm install` cannot find the packages:** this example asks for
-> `sure-factor` 0.3.2 and `sure-ui` 0.1.4, which are published but may not be
-> public yet. If you are working on the sure packages themselves, point at your
-> own copies instead:
+> **Working on the sure packages themselves?** The versions in `package.json` are
+> published releases, so a change you have not released yet will not show up
+> here. Point at your own copies instead:
 >
 > ```bash
 > npm install ../../../sure-factor ../../../sure-ui
+> npm test
 > ```
 
 ## What just happened
