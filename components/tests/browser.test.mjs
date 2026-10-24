@@ -90,7 +90,9 @@ test("the email field is typed and validated", async () => {
 test("a valid email produces a payload", async () => {
   await page.fill("#field-email", "reader@example.com");
   await page.fill("#field-display_name", "Ada Lovelace");
-  await page.fill("#field-signup_date", "10/01/2026");
+  // Since sure-factor 0.5.1 a DATE column renders a native date control, which
+  // takes and reports ISO values; the catalog's MM/DD/YYYY rule is for text.
+  await page.fill("#field-signup_date", "2026-10-01");
   await page.fill("#field-plan", "monthly");
   await page.click('button[type="submit"]');
   await page.waitForSelector("#result:not([hidden])", { timeout: 5000 });
