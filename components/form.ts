@@ -15,8 +15,12 @@ export interface FieldSpec {
   name: string
   label: string
   help: string
+  /** Section heading this field belongs to, when the schema declares one. */
+  group?: string | null
   required: boolean
   control: 'text' | 'password' | 'select' | 'textarea' | 'hidden'
+  /** HTML input type when the control is a text or password input. */
+  inputType?: 'text' | 'email' | 'number' | 'date' | 'password' | 'tel'
   type: string
   options?: string[]
   readOnly?: boolean
@@ -80,6 +84,7 @@ export function renderField(
 
   const common: Record<string, unknown> = {
     id,
+    class: "sure-form__input",
     name: field.name,
     value: field.control === 'select' ? value || (field.options?.[0] ?? '') : value,
     required: field.required,
@@ -108,7 +113,10 @@ export function renderField(
   } else if (field.control === 'textarea') {
     control = h('textarea', { ...common, rows: 5, spellcheck: 'false' })
   } else {
-    const type = field.control === 'password' ? 'password' : (field.type === 'email' ? 'email' : 'text')
+    // The HTML input type comes from the column's SQL type and catalog type,
+    // so a money column is a number input and a date is a date picker rather
+    // than a text box the browser cannot help with.
+    const type = field.control === 'password' ? 'password' : (field.inputType ?? 'text')
     control = h('input', { ...common, type })
   }
 
@@ -116,16 +124,30 @@ export function renderField(
   if (field.required) label.appendChild(h('span', { 'aria-hidden': 'true' }, ' *'))
 
   const parts: HTMLElement[] = [label, control]
-  if (field.help || field.hints?.help) {
-    parts.push(
-      h('div', { class: "sure-form__help", id: `${id}-help` },
-        [field.help, field.hints?.help].filter(Boolean).join(' \u2014 ')),
-    )
+  // The message container is always rendered, even when empty: it is the third
+  // row of the field, and a grouped form reserves that row so an error cannot
+  // reflow the rows below it.
+  {
+    // Help and error share ONE message row, so a field is always three rows
+    // tall (label / control / message) whether or not it has anything to say.
+    // That is what lets a grouped form align rows across columns.
+    const message = h('div', { class: "sure-form__message" })
+    // An error replaces the help text rather than stacking with it: one reason
+    // per row keeps the reserved line one line tall, so nothing below moves.
+    if (!error && (field.help || field.hints?.help)) {
+      // The same sentence can arrive in both places (a generated spec carries
+      // the help at the top level and under hints); show it once.
+      const helpText = [...new Set([field.help, field.hints?.help].filter(Boolean))].join(' \u2014 ')
+      message.appendChild(h('div', { class: "sure-form__help", id: `${id}-help` }, helpText))
+    }
+    if (error) {
+      message.appendChild(h('div', { class: "sure-form__error", id: `${id}-error`, role: 'alert' }, error))
+    }
+    parts.push(message)
   }
-  if (error) {
-    parts.push(h('div', { class: "sure-form__error", id: `${id}-error`, role: 'alert' }, error))
-  }
-  return h('div', { class: "sure-form__field" }, ...parts)
+  // data-field is the stable hook a product uses to widen one control or point
+  // layout CSS at it, without restyling the catalog classes.
+  return h('div', { class: "sure-form__field", 'data-field': field.name }, ...parts)
 }
 
 export interface FormOptions {
@@ -226,10 +248,12 @@ export function sanitizeForm(
     // maxLength bounds the stored value; `slice` in the catalog's own recipe
     // does too, but only where the recipe asks for it. A textarea is exempt so
     // a long entry is not silently truncated.
-    for (const step of field.sanitize?.length ? field.sanitize : ['trim']) {
-      value = applyStep(value, step)
-    }
     const max = v_max(field)
+    for (const step of field.sanitize?.length ? field.sanitize : ['trim']) {
+      // The recipe names the length as a token, slice(0, maxLength); it is
+      // resolved here, not inside the step, so a null bound means no bound.
+      value = applyStep(value, step, max)
+    }
     if (max && field.control !== 'textarea') {
       value = value.slice(0, max)
     }
@@ -244,13 +268,27 @@ export function sanitizeForm(
  * catalog may name one a future version adds, and that should not blank a
  * user's input.
  */
-function applyStep(value: string, step: string): string {
+function applyStep(value: string, step: string, maxLength: number | null): string {
   const call = step.match(/^(\w+)\(([^)]*)\)$/)
   if (call) {
     const args = call[2].split(',').map((a) => a.trim()).filter(Boolean)
     switch (call[1]) {
       case 'normalize': return value.normalize(args[0] ?? 'NFKC')
-      case 'slice': return value.slice(Number(args[0] ?? 0), args[1] !== undefined ? Number(args[1]) : undefined)
+      case 'slice': {
+        const start = Number(args[0] ?? 0)
+        const rawEnd = args[1]
+        const end = rawEnd === undefined
+          ? undefined
+          : rawEnd === 'maxLength'
+            ? (maxLength ?? undefined)
+            : Number(rawEnd)
+        // An unbounded or unparseable bound must not truncate: String.slice
+        // turns NaN into 0, which silently blanked every field whose catalog
+        // type declares no maxLength.
+        if (!Number.isFinite(start)) return value
+        if (end !== undefined && !Number.isFinite(end)) return value
+        return value.slice(start, end)
+      }
       default: break
     }
   }
@@ -308,8 +346,38 @@ export function renderForm(spec: FormSpec, options: FormOptions): HTMLFormElemen
   })
 
   form.appendChild(h('h2', { class: "sure-form__title" }, spec.title))
-  for (const field of visible) {
-    form.appendChild(renderField(field, values[field.name] ?? '', errors[field.name], busy, options.onChange))
+
+  // Fields may declare a group (a section in the source schema). With no
+  // groups this stays the single-column form it always was; with groups the
+  // order they first appear in is the order the sections render.
+  const grouped = visible.some((field) => field.group)
+  if (!grouped) {
+    for (const field of visible) {
+      form.appendChild(renderField(field, values[field.name] ?? '', errors[field.name], busy, options.onChange))
+    }
+  } else {
+    const order: string[] = []
+    const sections = new Map<string, FieldSpec[]>()
+    for (const field of visible) {
+      const name = field.group ?? ''
+      if (!sections.has(name)) {
+        sections.set(name, [])
+        order.push(name)
+      }
+      sections.get(name)!.push(field)
+    }
+    for (const name of order) {
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      const section = h('section', {
+        class: "sure-form__group",
+        ...(slug ? { 'data-group': slug } : {}),
+      })
+      if (name) section.appendChild(h('h3', { class: "sure-form__title" }, name))
+      for (const field of sections.get(name) ?? []) {
+        section.appendChild(renderField(field, values[field.name] ?? '', errors[field.name], busy, options.onChange))
+      }
+      form.appendChild(section)
+    }
   }
 
   const actions = h('div', { class: "sure-form__actions" })
@@ -332,7 +400,9 @@ export const GENERATED_FIELDS: FieldSpec[] = [
   {
     "name": "id",
     "label": "Id",
+    "group": null,
     "control": "text",
+    "inputType": "text",
     "type": "text",
     "required": false,
     "readOnly": true,
@@ -367,7 +437,9 @@ export const GENERATED_FIELDS: FieldSpec[] = [
   {
     "name": "email",
     "label": "Email",
+    "group": null,
     "control": "text",
+    "inputType": "email",
     "type": "email",
     "required": true,
     "readOnly": false,
@@ -402,7 +474,9 @@ export const GENERATED_FIELDS: FieldSpec[] = [
   {
     "name": "display_name",
     "label": "Display name",
+    "group": null,
     "control": "text",
+    "inputType": "text",
     "type": "full-name",
     "required": true,
     "readOnly": false,
@@ -437,7 +511,9 @@ export const GENERATED_FIELDS: FieldSpec[] = [
   {
     "name": "plan",
     "label": "Plan",
+    "group": null,
     "control": "text",
+    "inputType": "text",
     "type": "text",
     "required": true,
     "readOnly": false,
@@ -472,14 +548,16 @@ export const GENERATED_FIELDS: FieldSpec[] = [
   {
     "name": "signup_date",
     "label": "Signup date",
+    "group": null,
     "control": "text",
-    "type": "date-us",
+    "inputType": "date",
+    "type": "date-iso",
     "required": true,
     "readOnly": false,
     "secret": false,
     "json": false,
     "validation": {
-      "regex": "^\\d{2}/\\d{2}/\\d{4}$",
+      "regex": "^\\d{4}-\\d{2}-\\d{2}$",
       "minLength": null,
       "maxLength": 10
     },
@@ -488,12 +566,12 @@ export const GENERATED_FIELDS: FieldSpec[] = [
       "normalize(NFKC)",
       "slice(0, 10)"
     ],
-    "help": "Date in MM/DD/YYYY format",
+    "help": "Date in YYYY-MM-DD format",
     "hints": {
-      "placeholder": "07/24/2026",
-      "help": "Date in MM/DD/YYYY format",
+      "placeholder": "2026-07-24",
+      "help": "Date in YYYY-MM-DD format",
       "error": {
-        "format": "Must be a valid date in MM/DD/YYYY format",
+        "format": "Must be a valid date in YYYY-MM-DD format",
         "required": "Date is required"
       }
     },
@@ -505,7 +583,9 @@ export const GENERATED_FIELDS: FieldSpec[] = [
   {
     "name": "notes",
     "label": "Notes",
+    "group": null,
     "control": "text",
+    "inputType": "text",
     "type": "text",
     "required": false,
     "readOnly": false,
@@ -540,7 +620,9 @@ export const GENERATED_FIELDS: FieldSpec[] = [
   {
     "name": "invitations_id",
     "label": "Id",
+    "group": null,
     "control": "text",
+    "inputType": "text",
     "type": "text",
     "required": false,
     "readOnly": true,
@@ -575,7 +657,9 @@ export const GENERATED_FIELDS: FieldSpec[] = [
   {
     "name": "invitations_email",
     "label": "Email",
+    "group": null,
     "control": "text",
+    "inputType": "email",
     "type": "email",
     "required": true,
     "readOnly": false,
@@ -610,7 +694,9 @@ export const GENERATED_FIELDS: FieldSpec[] = [
   {
     "name": "invited_by",
     "label": "Invited by",
+    "group": null,
     "control": "text",
+    "inputType": "text",
     "type": "text",
     "required": true,
     "readOnly": false,
@@ -645,7 +731,9 @@ export const GENERATED_FIELDS: FieldSpec[] = [
   {
     "name": "created_at",
     "label": "Created at",
+    "group": null,
     "control": "text",
+    "inputType": "text",
     "type": "text",
     "required": false,
     "readOnly": false,
@@ -687,6 +775,8 @@ export const CSS_CLASSES = {
   "help": "sure-form__help",
   "label": "sure-form__label",
   "title": "sure-form__title",
+  "group": "sure-form__group",
+  "message": "sure-form__message",
   "actions": "sure-form__actions",
   "submit": "btn-primary",
   "cancel": "btn-secondary"
