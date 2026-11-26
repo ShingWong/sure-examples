@@ -148,7 +148,7 @@ The test file checks each of these in a real browser, not by reading the code.
 
 The form uses CSS class names that come from the same catalog entry that
 produced the fields — `sure-form`, `sure-form__label`, `sure-form__error` and so
-on. sure-ui ships four themes that style those names.
+on. sure-ui ships seven themes; the four listed below style those names.
 
 Pick one:
 
