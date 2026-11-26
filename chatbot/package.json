@@ -5,16 +5,19 @@
   "description": "Lightweight in-memory chatbot showcasing the sure-* ecosystem",
   "type": "module",
   "scripts": {
+    "generate": "node scripts/generate.mjs",
     "start": "tsx server.js",
-    "setup": "npm install && npm --prefix ../../sure-gentic run build && npm --prefix ../../sure-state run build && npm --prefix ../../sure-ui run build",
+    "setup": "npm install && npm --prefix ../../sure-gentic run build && npm --prefix ../../sure-state run build && npm --prefix ../../sure-ui run build && npm --prefix ../../sure-factor run build && npm run generate",
     "test": "cd tests && python3 run_tests.py"
   },
   "devDependencies": {
+    "esbuild": "^0.24.0",
     "tsx": "^4.0.0"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "pako": "^3.0.1",
+    "sure-factor": "file:../../sure-factor",
     "sure-gentic": "file:../../sure-gentic",
     "sure-state": "file:../../sure-state",
     "sure-ui": "file:../../sure-ui"

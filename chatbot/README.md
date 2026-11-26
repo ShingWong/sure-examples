@@ -1,6 +1,6 @@
 # sure-chatbot
 
-**A lightweight in-memory chatbot showcasing the sure-\* ecosystem.** Configure LLM provider, API key, model, temperature, and theme — all from the UI. No database, no external frameworks, zero dependencies beyond the sure-\* packages.
+**A lightweight in-memory chatbot showcasing the sure-\* ecosystem.** Configure LLM provider, API key, model, temperature, and theme — all from the UI. No database, no external frameworks. The settings and key forms are generated from SQL by sure-factor and rendered with plain DOM calls; the only build-time extra is esbuild, which strips types from the generated module.
 
 ```
 ┌───────────────────────────────────────────────────────────┐
@@ -43,7 +43,7 @@
 
 ```bash
 cd sure-examples/chatbot
-npm run setup              # install + build the file: linked sure-* deps
+npm run setup              # install, build the file: linked sure-* deps, generate forms
 npm start                    # tsx server.js
 # → http://localhost:3001
 ```
@@ -68,6 +68,12 @@ Open the **Settings** modal (⚙ in the header menu) to:
 - Change the model
 - Adjust temperature
 - Switch between Nord, Forest, Dracula, and Dark themes
+
+The provider, model, temperature and base-URL fields in that dialog — and the
+provider / base-URL / API-key fields in the 🔑 Keys dialog — are generated from
+`schema.sql`. The app supplies plain values and callbacks to the generated DOM
+renderer; it does not write those fields by hand. Theme swatches and the model
+browser button are app chrome around the generated form.
 
 Open the **🔧 Tools** dialog to:
 - Enable/disable tools (`web_search`, `calculator`, `current_time`, `firesearch_*`) — persisted server-side in `.tools.json`
@@ -234,31 +240,33 @@ The notification system follows sure-ui's pattern — `showNotification` with mo
 - Notification pattern (toast with auto-dismiss)
 - CSS variable-driven theming
 
-### sure-factor — Schema-Driven Generation (future)
+### sure-factor — Schema-Driven Generation
 
-Sure-factor could generate the settings form itself. The provider/model/temperature settings are a perfect match for sure-factor's form generation:
+`schema.sql` declares the two forms the chatbot needs: `chatbot_settings` and
+`provider_key`. `scripts/generate.mjs` reads it with sure-factor and writes
+`public/generated/form.js` — a framework-free DOM renderer plus the field list
+it was generated for. The browser imports that module, filters the generated
+fields by source table, and passes plain values and callbacks:
 
-```yaml
-# Hypothetical sure-factor type for the settings form
-name: llm-config
-description: LLM provider configuration
-fields:
-  - name: provider
-    type: select
-    options: [mock, openai, anthropic]
-    validation: required
-  - name: apiKey
-    type: password
-    validation: conditional (required when not mock)
-  - name: model
-    type: text
-    hints: { placeholder: 'gpt-4o' }
-  - name: temperature
-    type: range
-    validation: min:0, max:2, step:0.1
+```js
+const form = generatedForms.renderForm(
+  { id: 'chatbot-settings', title: 'LLM configuration', fields: SETTINGS_FIELDS() },
+  {
+    values: { provider, model, temperature, base_url },
+    onChange: onConfigChange,
+    onSubmit: saveConfig,
+  },
+)
 ```
 
-The generated output would include validation regexes, sanitization pipelines (trim API keys, escape model names), and sure-state store bindings — matching the three-tier (vibe, prototype, production) pattern.
+`temperature` is declared `NUMERIC(3,2)` in the SQL; the adapter turns the
+generated number input into a 0–2 range slider. The `CHECK (... IN (...))`
+constraints become provider selects, and the `key_password` column becomes a
+password input. Labels, help text, validation, sanitisers and `sure-form__*`
+CSS classes all come from sure-factor's catalog — the app only wires them to
+the existing cookie-backed config and key APIs. Re-run `npm run generate`
+after changing the schema; the generated files are checked in so the E2E suite
+needs no build step.
 
 ### sure-web-testing — E2E Browser Testing
 
@@ -283,33 +291,36 @@ screenshot = mgr.screenshot()
 mgr.close()
 ```
 
-The test suite covers 21 scenarios:
+The suite has 26 steps:
 
 | # | Test | What it verifies |
 |---|------|-----------------|
 | 1 | `launch` | Browser session starts |
 | 2 | `goto chatbot` | Page loads without error |
-| 3 | `verify page load` | Title and URL are correct |
-| 4 | `verify sidebar` | Sidebar header, settings button, chat input exist |
-| 5 | `screenshot initial` | Base64 screenshot captured |
-| 6 | `open settings` | Header menu opens the Settings modal |
-| 7 | `verify settings` | Provider select, model, temperature, themes all present |
-| 8 | `switch theme` | Dracula theme applies via click |
-| 9 | `screenshot dracula` | Visual confirmation of theme change |
-| 10 | `switch back to nord` | Theme switches back |
-| 11 | `close settings` | Modal closes |
-| 12 | `send message` | Text fills and send button works |
-| 13 | `verify response` | Assistant response appears in DOM |
-| 14 | `screenshot with messages` | Chat with conversation captured |
-| 15 | `console logs` | Browser console captured (no errors) |
-| 16 | `network requests` | API calls logged |
-| 17 | `clear messages` | Clear button works |
-| 18 | `new conversation` | New conversation button works |
-| 19 | `verify new conversation` | Clean state after new conversation |
-| 20 | `preview panel` | Right-hand preview panel opens and renders |
-| 21 | `key management` | API Keys modal opens |
-| 22 | `screenshot final` | Final state captured |
-| 23 | `close` | Browser session cleaned up |
+| 3 | `verify login page` | Login form is rendered |
+| 4 | `screenshot login` | Login screenshot captured |
+| 5 | `sign in` | Demo credentials open the chat UI |
+| 6 | `verify page load` | Title and URL are correct |
+| 7 | `verify sidebar` | Sidebar heading, settings button, chat input exist |
+| 8 | `screenshot initial` | Base64 screenshot captured |
+| 9 | `open settings` | Header menu opens the Settings modal |
+| 10 | `verify settings` | Generated provider, model and temperature controls plus four themes |
+| 11 | `switch theme` | Dracula theme applies via click |
+| 12 | `screenshot dracula` | Visual confirmation of theme change |
+| 13 | `switch back to nord` | Theme switches back |
+| 14 | `close settings` | Modal closes |
+| 15 | `send message` | Text fills and send button works |
+| 16 | `verify response` | Assistant response appears in DOM |
+| 17 | `screenshot with messages` | Chat with conversation captured |
+| 18 | `console logs` | Browser console captured |
+| 19 | `network requests` | API calls logged |
+| 20 | `clear messages` | Clear button works |
+| 21 | `new conversation` | New conversation button works |
+| 22 | `verify new conversation` | Clean state after new conversation |
+| 23 | `preview panel` | Right-hand preview panel opens and renders |
+| 24 | `key management` | Generated API Keys form opens |
+| 25 | `screenshot final` | Final state captured |
+| 26 | `close` | Browser session cleaned up |
 
 Each step asserts against the live DOM — element text, attributes, or the
 CSS the app actually injected. Assertions are scoped to a specific element
@@ -403,7 +414,7 @@ Send a message and get a response:
 
 ### `GET /api/theme?name=nord`
 
-Returns raw CSS for the named theme (`nord`, `forest`, `dracula`).
+Returns raw CSS for one of the four exposed themes (`nord`, `forest`, `dracula`, `dark`).
 
 ### `GET /api/tools`
 
@@ -432,10 +443,16 @@ Enable/disable tools (unknown names are rejected):
 ```
 chatbot/
   README.md        ← this file (extensive documentation)
-  package.json     ← depends on sure-gentic, sure-state, sure-ui
+  package.json     ← depends on sure-factor, sure-gentic, sure-state, sure-ui
+  schema.sql       ← DDL for the settings and key forms
+  scripts/
+    generate.mjs   ← sure-factor → public/generated/form.js (run `npm run generate`)
   server.js        ← Node.js HTTP server (zero external framework)
   public/
-    index.html     ← single-file frontend (chat UI + settings + themes + cookie persistence)
+    index.html     ← single-file frontend (chat UI + generated settings + themes + cookies)
+    generated/
+      form.js      ← committed, dependency-free DOM renderer generated from schema.sql
+      fields.json  ← the same field specs as plain data, for inspection
   tests/
     run_tests.py   ← test runner (starts server, runs tests, cleans up)
     test_chatbot.py ← 26 E2E tests using sure-web-testing BrowserManager
@@ -452,6 +469,5 @@ Ideas for extending the example:
 | **Agent tools** | Add `web_search` or `calculator` tools via sure-gentic's `ToolRegistryService` | sure-gentic |
 | **MCP server** | Add `createAgentTools` + `createMcpServer` so OpenCode can inspect state | sure-state |
 | **Audit logging** | Add `createMetricsCollector` + `attachOtelSpans` to the event bus | sure-state |
-| **Form generation** | Generate the settings form with sure-factor from a type catalog | sure-factor |
 | **E2E testing** | Test with sure-web-testing's MCP server + Playwright | sure-web-testing |
 | **Notification themes** | Use sure-ui's `showNotification` with `sidePanel` mode for error history | sure-ui |
