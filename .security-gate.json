@@ -1,0 +1,25 @@
+{
+  "allow": [
+    {
+      "file": ".github/workflows/ci.yml",
+      "label": "Email address",
+      "match": "dependencies.@shing.wong",
+      "reason": "scoped npm dependency key, not an address"
+    },
+    {
+      "file": "chatbot/server.js",
+      "label": "Internal hostname",
+      "match": "metadata.google.internal",
+      "reason": "GCP metadata endpoint constant"
+    },
+    {
+      "file": "chatbot/server.js",
+      "label": "Hardcoded password",
+      "match": "password: 'demo'",
+      "reason": "demo credential in the example login page"
+    }
+  ],
+  "safeIps": [
+    "169.254.169.254"
+  ]
+}
