@@ -114,6 +114,15 @@ jobs:
         with:
           path: sure-examples
 
+      # The chatbot generates its settings and key forms from schema.sql with
+      # sure-factor, so the file: alias needs this checkout too.
+      - name: Check out sure-factor
+        uses: actions/checkout@v6
+        with:
+          repository: ShingWong/sure-factor
+          ref: main
+          path: sure-factor
+
       - name: Check out sure-gentic
         uses: actions/checkout@v6
         with:
@@ -152,7 +161,7 @@ jobs:
       - name: Build the sure-* packages
         run: |
           set -euo pipefail
-          for pkg in sure-gentic sure-state sure-ui; do
+          for pkg in sure-factor sure-gentic sure-state sure-ui; do
             echo "::group::build $pkg"
             npm --prefix "$pkg" ci
             npm --prefix "$pkg" run build
@@ -169,14 +178,14 @@ jobs:
         working-directory: sure-examples/chatbot
         run: |
           set -euo pipefail
-          for pkg in sure-gentic sure-state sure-ui; do
+          for pkg in sure-factor sure-gentic sure-state sure-ui; do
             if [ ! -e "node_modules/$pkg/package.json" ]; then
               echo "::error::$pkg did not install (dangling file: link)"
               exit 1
             fi
           done
           node --input-type=module -e "
-            for (const m of ['sure-gentic','sure-state','sure-ui']) {
+            for (const m of ['sure-factor','sure-gentic','sure-state','sure-ui']) {
               await import(m);
               console.log('  ' + m + ' resolves');
             }

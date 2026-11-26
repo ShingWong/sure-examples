@@ -10,7 +10,7 @@ For the full ten-project ecosystem map, see `sure-master/docs/SURE-STACK-OVERVIE
 |---------|-------------|-----------|
 | [components](./components/) | **Start here if you are new.** Write a database table, get a working validated form. No HTML written by hand. | sure-factor, sure-ui |
 | [grouped-form](./grouped-form/) | Schema-defined sections, aligned grid — reduce cognitive load on long forms with two CSS variables. | sure-factor, sure-ui |
-| [chatbot](./chatbot/) | Lightweight in-memory chatbot with configurable LLM provider, API keys, models, and themes. A 26-step E2E browser suite included. | sure-gentic, sure-state, sure-ui, sure-web-testing |
+| [chatbot](./chatbot/) | Lightweight in-memory chatbot with configurable LLM provider, API keys, models, and themes. A 26-step E2E browser suite included. | sure-factor, sure-gentic, sure-state, sure-ui, sure-web-testing |
 
 ## Meet the stack
 
@@ -36,7 +36,7 @@ Seven cohesive themes (Nord, Forest, Dracula, Dark, Positronic, vision-system, v
 
 Point sure-factor at a SQL schema and get production-grade form UIs — validated, sanitized, and internationalized from day one, at three quality tiers from weekend vibe to audited production. Fifteen built-in types (email, phone, ICD-10, SSN…) carry their own regex, pipelines, and translations.
 
-*In the chatbot:* not wired in yet — settings and key-management forms are still hand-written. That roadmap already works in the [components](./components/) and [grouped-form](./grouped-form/) examples: forms generated from a schema by sure-factor, styled by sure-ui.
+*In the chatbot:* the settings and key-management forms are generated from `chatbot/schema.sql` by sure-factor and drawn with plain DOM calls — no hand-written fields, no React. The [components](./components/) and [grouped-form](./grouped-form/) examples remain the simplest starting point.
 
 ### [sure-web-testing](https://github.com/ShingWong/sure-web-testing) — a browser your agent can drive
 
@@ -50,7 +50,7 @@ The whole ecosystem (the first five are the ones showcased here):
 
 | Project | Role | Used here |
 |---------|------|-----------|
-| [sure-factor](https://github.com/ShingWong/sure-factor) | Schema-driven code generation | components, grouped-form |
+| [sure-factor](https://github.com/ShingWong/sure-factor) | Schema-driven code generation | components, grouped-form, chatbot |
 | [sure-state](https://github.com/ShingWong/sure-state) | Client-server state synchronization | chatbot |
 | [sure-ui](https://github.com/ShingWong/sure-ui) | Theme CSS + notification runtime | all three |
 | [sure-gentic](https://github.com/ShingWong/sure-gentic) | Portable agent creation framework | chatbot |

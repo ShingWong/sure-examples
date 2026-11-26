@@ -1,0 +1,278 @@
+[
+  {
+    "name": "provider",
+    "label": "LLM Provider",
+    "group": null,
+    "control": "select",
+    "inputType": "text",
+    "type": "text",
+    "options": [
+      "mock",
+      "openai",
+      "anthropic",
+      "google",
+      "google-vertex",
+      "openrouter",
+      "openai-compatible"
+    ],
+    "required": true,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": null,
+      "maxLength": null
+    },
+    "sanitize": [
+      "trim",
+      "collapseWhitespace",
+      "normalize(NFKC)",
+      "stripControl",
+      "slice(0, maxLength)"
+    ],
+    "help": "Also set your API key in the 🔑 Keys dialog",
+    "hints": {
+      "placeholder": "Enter text...",
+      "help": "Also set your API key in the 🔑 Keys dialog",
+      "error": {
+        "format": "",
+        "required": "This field is required"
+      }
+    },
+    "source": {
+      "table": "chatbot_settings",
+      "column": "provider"
+    }
+  },
+  {
+    "name": "model",
+    "label": "Model",
+    "group": null,
+    "control": "text",
+    "inputType": "text",
+    "type": "text",
+    "required": false,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": null,
+      "maxLength": null
+    },
+    "sanitize": [
+      "trim",
+      "collapseWhitespace",
+      "normalize(NFKC)",
+      "stripControl",
+      "slice(0, maxLength)"
+    ],
+    "help": "Leave empty for the provider default",
+    "hints": {
+      "placeholder": "Enter text...",
+      "help": "Leave empty for the provider default",
+      "error": {
+        "format": "",
+        "required": "This field is required"
+      }
+    },
+    "source": {
+      "table": "chatbot_settings",
+      "column": "model"
+    }
+  },
+  {
+    "name": "temperature",
+    "label": "Temperature",
+    "group": null,
+    "control": "text",
+    "inputType": "number",
+    "type": "text",
+    "required": true,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": null,
+      "maxLength": null
+    },
+    "sanitize": [
+      "trim",
+      "collapseWhitespace",
+      "normalize(NFKC)",
+      "stripControl",
+      "slice(0, maxLength)"
+    ],
+    "help": "0 = precise, 2 = creative",
+    "hints": {
+      "placeholder": "Enter text...",
+      "help": "0 = precise, 2 = creative",
+      "error": {
+        "format": "",
+        "required": "This field is required"
+      }
+    },
+    "source": {
+      "table": "chatbot_settings",
+      "column": "temperature"
+    }
+  },
+  {
+    "name": "base_url",
+    "label": "Base URL",
+    "group": null,
+    "control": "text",
+    "inputType": "text",
+    "type": "url",
+    "required": false,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": "^https?://[^\\s/$.?#].[^\\s]*$",
+      "minLength": null,
+      "maxLength": 2048
+    },
+    "sanitize": [
+      "trim",
+      "lowercase",
+      "stripJavaScriptProtocol",
+      "normalize(NFKC)",
+      "slice(0, 2048)"
+    ],
+    "help": "API endpoint for OpenAI-compatible providers — Full URL including https://",
+    "hints": {
+      "placeholder": "https://example.com",
+      "help": "API endpoint for OpenAI-compatible providers — Full URL including https://",
+      "error": {
+        "format": "Must be a valid URL starting with http:// or https://",
+        "required": "URL is required"
+      }
+    },
+    "source": {
+      "table": "chatbot_settings",
+      "column": "base_url"
+    }
+  },
+  {
+    "name": "key_provider",
+    "label": "Provider",
+    "group": null,
+    "control": "select",
+    "inputType": "text",
+    "type": "text",
+    "options": [
+      "openai",
+      "anthropic",
+      "google",
+      "google-vertex",
+      "openrouter",
+      "openai-compatible",
+      "serpapi",
+      "exa",
+      "firesearch"
+    ],
+    "required": true,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": null,
+      "maxLength": null
+    },
+    "sanitize": [
+      "trim",
+      "collapseWhitespace",
+      "normalize(NFKC)",
+      "stripControl",
+      "slice(0, maxLength)"
+    ],
+    "help": "Where this key is used",
+    "hints": {
+      "placeholder": "Enter text...",
+      "help": "Where this key is used",
+      "error": {
+        "format": "",
+        "required": "This field is required"
+      }
+    },
+    "source": {
+      "table": "provider_key",
+      "column": "key_provider"
+    }
+  },
+  {
+    "name": "key_base_url",
+    "label": "Base URL",
+    "group": null,
+    "control": "text",
+    "inputType": "text",
+    "type": "url",
+    "required": false,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": "^https?://[^\\s/$.?#].[^\\s]*$",
+      "minLength": null,
+      "maxLength": 2048
+    },
+    "sanitize": [
+      "trim",
+      "lowercase",
+      "stripJavaScriptProtocol",
+      "normalize(NFKC)",
+      "slice(0, 2048)"
+    ],
+    "help": "Instance host for Firesearch or an OpenAI-compatible endpoint — Full URL including https://",
+    "hints": {
+      "placeholder": "https://example.com",
+      "help": "Instance host for Firesearch or an OpenAI-compatible endpoint — Full URL including https://",
+      "error": {
+        "format": "Must be a valid URL starting with http:// or https://",
+        "required": "URL is required"
+      }
+    },
+    "source": {
+      "table": "provider_key",
+      "column": "key_base_url"
+    }
+  },
+  {
+    "name": "key_password",
+    "label": "API Key",
+    "group": null,
+    "control": "password",
+    "inputType": "password",
+    "type": "password",
+    "required": true,
+    "readOnly": false,
+    "secret": false,
+    "json": false,
+    "validation": {
+      "regex": null,
+      "minLength": 8,
+      "maxLength": 128
+    },
+    "sanitize": [
+      "trim"
+    ],
+    "help": "Stored encrypted on the server; never sent back to the browser — At least 8 characters with uppercase, lowercase, and number",
+    "hints": {
+      "placeholder": "••••••••",
+      "help": "Stored encrypted on the server; never sent back to the browser — At least 8 characters with uppercase, lowercase, and number",
+      "error": {
+        "format": "Must be at least 8 characters with uppercase, lowercase, and a number",
+        "required": "Password is required",
+        "tooShort": "Must be at least 8 characters"
+      }
+    },
+    "source": {
+      "table": "provider_key",
+      "column": "key_password"
+    }
+  }
+]
