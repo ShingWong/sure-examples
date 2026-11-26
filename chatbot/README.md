@@ -211,8 +211,8 @@ Themes are loaded dynamically from the server, which reads sure-ui's exported CS
 
 ```js
 // Server endpoint: GET /api/theme?name=nord
-import { nord, forest, dracula } from 'sure-ui'
-const themes = { nord, forest, dracula }
+import { nord, forest, dracula, dark } from 'sure-ui'   // local alias in this example
+const themes = { nord, forest, dracula, dark }
 res.end(themes[themeName])  // Returns raw CSS string
 ```
 
@@ -230,7 +230,7 @@ The notification system follows sure-ui's pattern — `showNotification` with mo
 
 **Key sure-ui concepts demonstrated:**
 - Theme CSS strings — import and inject at runtime
-- Three themes: Nord, Forest, Dracula
+- Four themes: Nord, Forest, Dracula, Dark (sure-ui itself ships seven)
 - Notification pattern (toast with auto-dismiss)
 - CSS variable-driven theming
 
