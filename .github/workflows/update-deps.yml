@@ -1,0 +1,104 @@
+name: Update sure-example dependencies
+
+# Keeps the examples' declared versions and checked-in generated output in step
+# with the published sure stack. Runs weekly and on demand; never pushes to
+# main directly — branch protection requires CI, so changes arrive as a PR.
+#
+# CI already exercises the examples against the sibling repos' working trees
+# (see ci.yml). This workflow covers the *published* versions that a reader gets
+# from `npm install`, which is what the example manifests declare.
+
+on:
+  schedule:
+    - cron: '0 7 * * 1' # Mondays 07:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: sure-example-deps
+  cancel-in-progress: true
+
+jobs:
+  update:
+    name: bump, regenerate, verify, PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out sure-examples
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Read published sure versions
+        id: versions
+        run: |
+          set -euo pipefail
+          echo "factor=$(npm view @shing.wong/sure-factor version)" >> "$GITHUB_OUTPUT"
+          echo "ui=$(npm view @shing.wong/sure-ui version)" >> "$GITHUB_OUTPUT"
+
+      - name: Update manifests
+        env:
+          FACTOR: ${{ steps.versions.outputs.factor }}
+          UI: ${{ steps.versions.outputs.ui }}
+        run: |
+          set -euo pipefail
+          for example in components grouped-form; do
+            npm --prefix "$example" install \
+              "@shing.wong/sure-factor@^$FACTOR" \
+              "@shing.wong/sure-ui@^$UI" \
+              --no-audit --no-fund
+          done
+          # `npm pkg set` mis-parses the scoped name (the scope contains a dot),
+          # so update this reference manifest with node instead.
+          node <<'NODE'
+          const fs = require('node:fs')
+          const path = 'grouped-form/package.published.json'
+          const manifest = JSON.parse(fs.readFileSync(path, 'utf8'))
+          manifest.dependencies['@shing.wong/sure-factor'] = `^${process.env.FACTOR}`
+          manifest.dependencies['@shing.wong/sure-ui'] = `^${process.env.UI}`
+          fs.writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`)
+          NODE
+
+      - name: Install Chromium
+        run: npm --prefix components exec -- playwright install --with-deps chromium
+
+      - name: Regenerate and verify both examples
+        # `npm test` rebuilds the checked-in form.ts/fields.json from schema.sql,
+        # fails if they differ from what the generator produces, and exercises
+        # the result in a real browser.
+        run: |
+          set -euo pipefail
+          npm --prefix components test
+          npm --prefix grouped-form test
+
+      - name: Open or refresh a PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "Nothing to update — examples already track the published versions."
+            exit 0
+          fi
+          branch=bot/update-sure-deps
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git add -A
+          git commit -m "chore(examples): update sure-factor/sure-ui to published releases"
+          git push --force origin "$branch"
+          existing=$(gh pr list --head "$branch" --base main --json number --jq '.[0].number')
+          if [ -n "$existing" ]; then
+            echo "Refreshed PR #$existing"
+          else
+            gh pr create --base main --head "$branch" \
+              --title "chore(examples): update sure-factor/sure-ui dependencies" \
+              --body "Automated by update-deps.yml: bumped the published sure versions, regenerated checked-in example output and ran both real-browser suites."
+          fi

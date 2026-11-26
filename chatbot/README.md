@@ -9,7 +9,7 @@
 │  │ sure-    │  │ sure-    │  │ sure-ui          │        │
 │  │ gentic   │  │ state    │  │ themes + toasts  │        │
 │  │ Agent +  │  │ eventBus │  │                  │        │
-│  │ Skills   │  │ store    │  │ 3 themes         │        │
+│  │ Skills   │  │ store    │  │ 4 themes         │        │
 │  │          │  │ pattern  │  │ notifications    │        │
 │  └────┬─────┘  └────┬─────┘  └────────┬─────────┘        │
 │       │             │                 │                  │
